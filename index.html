@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=1280, initial-scale=1">
+    <title>Coder TechnoDash</title>
+    <link rel="stylesheet" href="styles/main.css?v=tabs-31">
+    <script defer src="https://cdn.jsdelivr.net/npm/phaser@4.1.0/dist/phaser.min.js"></script>
+    <script defer src="src/game/DecorCatalog.js?v=tabs-31"></script>
+    <script defer src="src/game/Player.js?v=tabs-31"></script>
+    <script defer src="src/game/Level.js?v=tabs-31"></script>
+    <script defer src="src/game/CollisionManager.js?v=tabs-31"></script>
+    <script defer src="src/game/GameScene.js?v=tabs-31"></script>
+    <script defer src="src/editor/PseudoCodeGenerator.js?v=tabs-31"></script>
+    <script defer src="src/editor/BlockEditor.js?v=tabs-31"></script>
+    <script defer src="src/editor/LevelEditor.js?v=tabs-31"></script>
+    <script defer src="src/main.js?v=tabs-31"></script>
+  </head>
+  <body>
+    <div class="desktop-warning">
+      Atelier prévu pour un ordinateur.
+    </div>
+
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark">TD</span>
+          <div>
+            <h1>Coder TechnoDash</h1>
+            <p>Coder, tester, puis créer le niveau</p>
+          </div>
+        </div>
+
+        <nav class="tab-nav" aria-label="Sections de l'atelier">
+          <button class="tab-button is-active" type="button" data-tab="code">Code</button>
+          <button class="tab-button" type="button" data-tab="game">Jeu</button>
+          <button class="tab-button" type="button" data-tab="level">Level design</button>
+        </nav>
+
+        <nav class="top-actions" aria-label="Actions du projet">
+          <button id="test-button" class="test-action" type="button">Tester</button>
+          <button id="reset-program-button" type="button">Remettre à zéro</button>
+          <button id="validate-level-button" class="validate-action" type="button">Valider le niveau</button>
+          <button id="load-level-button" type="button">Charger niveau</button>
+        </nav>
+
+        <div class="status-stack" aria-live="polite">
+          <p id="level-name-label" class="level-name-label">Niveau : sans nom</p>
+          <p id="program-status" class="program-status">Programme de base</p>
+        </div>
+      </header>
+
+      <main class="tab-shell">
+        <section id="code-tab" class="tab-page is-active" data-page="code" aria-label="Code">
+          <div class="coding-workspace">
+            <aside class="panel palette-panel" aria-label="Palette de blocs">
+              <div class="panel-heading">
+                <h2>Blocs</h2>
+              </div>
+              <div id="category-tabs" class="category-tabs" role="tablist"></div>
+              <div id="block-library" class="block-library" aria-live="polite"></div>
+            </aside>
+
+            <section class="panel script-panel" aria-label="Programme du jeu">
+              <div class="panel-heading">
+                <h2>Programme du jeu</h2>
+                <span id="program-count" class="program-count">0 blocs</span>
+              </div>
+              <div id="program-area" class="program-area"></div>
+              <p id="block-hint" class="status-line" aria-live="polite"></p>
+            </section>
+
+            <aside class="panel side-panel" aria-label="Pseudo-code">
+              <section class="side-section pseudo-section">
+                <div class="section-title">
+                  <h2>Pseudo-code</h2>
+                </div>
+                <pre id="pseudocode-output" class="pseudocode-output"></pre>
+              </section>
+
+              <section class="side-section rules-section">
+                <div class="section-title">
+                  <h2>Guidage</h2>
+                </div>
+                <ul class="rule-list">
+                  <li>Le départ du jeu est intégré au programme.</li>
+                  <li>Gameplay : ajoute la boucle, les conditions et les actions.</li>
+                  <li>Les blocs restent libres, le test montre ce qui fonctionne.</li>
+                  <li>Teste souvent, observe, puis améliore ton programme.</li>
+                </ul>
+              </section>
+            </aside>
+          </div>
+        </section>
+
+        <section id="game-tab" class="tab-page" data-page="game" aria-label="Jeu">
+          <div class="game-workspace">
+            <section id="game-panel" class="panel game-panel" data-mode="test">
+              <div class="panel-heading">
+                <h2 id="game-title">Test du jeu</h2>
+                <div class="game-actions">
+                  <button id="play-button" class="test-action" type="button">Tester</button>
+                  <button id="stop-button" type="button">Stop</button>
+                  <button id="reset-button" type="button">Reset</button>
+                </div>
+              </div>
+              <div class="game-frame">
+                <div id="game-container"></div>
+                <div id="game-message" class="game-message">Prêt</div>
+              </div>
+              <div class="game-footer">
+                <span id="game-state-label">Prêt</span>
+                <span>Distance <strong id="distance-value">0</strong></span>
+                <span>Score <strong id="score-value">0</strong></span>
+                <span>Espace : saut</span>
+                <span>R : reset</span>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section id="level-tab" class="tab-page" data-page="level" aria-label="Level design">
+          <div class="level-workspace">
+            <section class="panel level-panel">
+              <div class="panel-heading">
+                <h2>Level design</h2>
+                <span id="level-length-label" class="program-count">8000 px</span>
+              </div>
+
+              <div id="level-scroll" class="level-scroll" aria-label="Défilement horizontal du niveau">
+                <div id="level-grid" class="level-grid" aria-label="Grille horizontale du niveau">
+                  <div class="grid-ground"></div>
+                </div>
+              </div>
+
+              <div class="level-ruler">
+                <span>Début</span>
+                <span>Fin provisoire</span>
+              </div>
+            </section>
+
+            <aside class="panel side-panel level-side-panel" aria-label="Outils du niveau">
+              <section class="side-section level-palette-section">
+                <div class="section-title">
+                  <h2>Palette</h2>
+                </div>
+                <div class="level-tool-palette" aria-label="Palette level design">
+                  <button class="tool-button is-active" type="button" data-tool="triangle">
+                    <span class="tool-swatch" data-type="triangle"></span>
+                    <span>Pic</span>
+                    <small>Game Over</small>
+                  </button>
+                  <button class="tool-button" type="button" data-tool="block">
+                    <span class="tool-swatch" data-type="block"></span>
+                    <span>Bloc danger</span>
+                    <small>côté gauche</small>
+                  </button>
+                  <button class="tool-button" type="button" data-tool="platform">
+                    <span class="tool-swatch" data-type="platform"></span>
+                    <span>Plateforme</span>
+                    <small>solide</small>
+                  </button>
+                  <button class="tool-button" type="button" data-tool="solidBlock">
+                    <span class="tool-swatch" data-type="solidBlock"></span>
+                    <span>Bloc solide</span>
+                    <small>pas Game Over</small>
+                  </button>
+                  <button class="tool-button" type="button" data-tool="finish">
+                    <span class="tool-swatch" data-type="finish"></span>
+                    <span>Arrivée</span>
+                    <small>victoire</small>
+                  </button>
+                  <button class="tool-button" type="button" data-tool="eraser">
+                    <span class="tool-swatch" data-type="eraser"></span>
+                    <span>Gomme</span>
+                    <small>supprimer</small>
+                  </button>
+                </div>
+              </section>
+
+              <section class="side-section">
+                <div class="section-title">
+                  <h2>Paramètres</h2>
+                </div>
+                <div class="settings-grid">
+                  <label>
+                    Vitesse
+                    <input id="speed-input" type="number" min="120" max="520" step="10" value="280">
+                  </label>
+                  <label>
+                    Gravité
+                    <input id="gravity-input" type="number" min="600" max="2400" step="50" value="1350">
+                  </label>
+                  <label>
+                    Force de saut
+                    <input id="jump-input" type="number" min="260" max="900" step="10" value="560">
+                  </label>
+                </div>
+              </section>
+
+              <section class="side-section">
+                <div class="section-title">
+                  <h2>Sélection</h2>
+                </div>
+                <div class="selection-panel">
+                  <span id="selected-obstacle-info">Aucun élément sélectionné</span>
+                  <button id="delete-obstacle-button" class="danger-button" type="button" disabled>Supprimer</button>
+                  <button id="clear-level-button" class="secondary-button" type="button">Tout effacer</button>
+                </div>
+              </section>
+
+              <section class="side-section">
+                <div class="section-title">
+                  <h2>Utilisation</h2>
+                </div>
+                <ul class="rule-list">
+                  <li>Clique sur la grille pour poser l'outil choisi.</li>
+                  <li>La gomme supprime seulement l'élément touché.</li>
+                  <li>La zone se prolonge quand tu construis vers la droite.</li>
+                </ul>
+              </section>
+            </aside>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <input id="level-file-input" class="visually-hidden" type="file" accept=".json,application/json">
+
+    <div id="validation-modal" class="validation-modal" hidden role="dialog" aria-labelledby="validation-title">
+      <section class="validation-card" aria-live="polite">
+        <div class="validation-heading">
+          <div>
+            <h2 id="validation-title">Validation du niveau</h2>
+            <p id="validation-message">Atteins l'arrivée pour débloquer le téléchargement.</p>
+          </div>
+          <button id="close-validation-button" class="icon-close" type="button" aria-label="Fermer la validation">×</button>
+        </div>
+        <div class="validation-state">
+          <span id="validation-state-label">En attente</span>
+          <span id="validation-distance-label">Distance 0</span>
+        </div>
+        <div class="validation-actions">
+          <button id="start-validation-button" class="test-action" type="button">Relancer</button>
+          <button id="download-level-button" type="button" disabled>Télécharger le niveau</button>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>
