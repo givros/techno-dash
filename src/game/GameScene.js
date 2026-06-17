@@ -379,8 +379,9 @@
       }
 
       const graphics = this.levelGraphics;
+      const settings = this.getRuntimeSettings();
       graphics.clear();
-      graphics.fillStyle(0x121722, 1);
+      graphics.fillStyle(window.TechnoDash.Level.hexToNumber(settings.backgroundColor, 0x121722), 1);
       graphics.fillRect(0, 0, this.worldWidth, this.worldHeight);
 
       if (this.programFeatures.background) {
@@ -479,31 +480,34 @@
         }
 
         if (object.type === "block") {
-          graphics.fillStyle(0xf0b429, 1);
+          const colors = window.TechnoDash.Level.getObstacleColorStyle(object.type, object.color);
+          graphics.fillStyle(window.TechnoDash.Level.hexToNumber(colors.color, 0xf0b429), 1);
           graphics.fillRect(object.left, object.top, object.width, object.height);
-          graphics.fillStyle(0xc7352f, 1);
+          graphics.fillStyle(window.TechnoDash.Level.hexToNumber(colors.danger, 0xc7352f), 1);
           graphics.fillRect(object.left, object.top + 6, Math.min(12, object.width * 0.24), object.height - 12);
-          graphics.lineStyle(2, 0x4d3500, 0.8);
+          graphics.lineStyle(2, window.TechnoDash.Level.hexToNumber(colors.stroke, 0x4d3500), 0.8);
           graphics.strokeRect(object.left, object.top, object.width, object.height);
           return;
         }
 
         if (object.type === "solidBlock") {
-          graphics.fillStyle(0x5aa7e8, 1);
+          const colors = window.TechnoDash.Level.getObstacleColorStyle(object.type, object.color);
+          graphics.fillStyle(window.TechnoDash.Level.hexToNumber(colors.color, 0x5aa7e8), 1);
           graphics.fillRect(object.left, object.top, object.width, object.height);
-          graphics.fillStyle(0x9bd0ff, 1);
+          graphics.fillStyle(window.TechnoDash.Level.hexToNumber(colors.accent, 0x9bd0ff), 1);
           graphics.fillRect(object.left + 5, object.top + 5, object.width - 10, 8);
-          graphics.lineStyle(2, 0x1f5f93, 0.9);
+          graphics.lineStyle(2, window.TechnoDash.Level.hexToNumber(colors.stroke, 0x1f5f93), 0.9);
           graphics.strokeRect(object.left, object.top, object.width, object.height);
           return;
         }
 
         if (object.type === "platform") {
-          graphics.fillStyle(0x35b6a6, 1);
+          const colors = window.TechnoDash.Level.getObstacleColorStyle(object.type, object.color);
+          graphics.fillStyle(window.TechnoDash.Level.hexToNumber(colors.color, 0x35b6a6), 1);
           graphics.fillRect(object.left, object.top, object.width, object.height);
-          graphics.fillStyle(0x7ee4d6, 1);
+          graphics.fillStyle(window.TechnoDash.Level.hexToNumber(colors.accent, 0x7ee4d6), 1);
           graphics.fillRect(object.left, object.top, object.width, 6);
-          graphics.lineStyle(2, 0x0f5f59, 0.9);
+          graphics.lineStyle(2, window.TechnoDash.Level.hexToNumber(colors.stroke, 0x0f5f59), 0.9);
           graphics.strokeRect(object.left, object.top, object.width, object.height);
           return;
         }

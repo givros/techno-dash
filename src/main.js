@@ -279,7 +279,7 @@
         parent: "game-container",
         width: 760,
         height: 430,
-        backgroundColor: "#121722",
+        backgroundColor: currentLevelData.settings.backgroundColor || "#121722",
         scene: [gameScene],
         scale: {
           mode: Phaser.Scale.FIT,

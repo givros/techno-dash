@@ -13,6 +13,7 @@
       const speed = settings && settings.speed ? settings.speed : 280;
       const gravity = settings && settings.gravity ? settings.gravity : 1350;
       const jumpForce = settings && settings.jumpForce ? settings.jumpForce : 560;
+      const backgroundColor = settings && settings.backgroundColor ? settings.backgroundColor : "#121722";
 
       const initBlocks = blocks.filter((id) => this.getSection(id, blockSections) === "initialization");
       const gameplayBlocks = blocks.filter((id) => this.getSection(id, blockSections) === "gameplay");
@@ -21,7 +22,7 @@
       lines.push("    QUAND le jeu commence");
       const startSeen = true;
       initBlocks.forEach((id) => {
-        this.getBlockLines(id, { speed, gravity, jumpForce }).forEach((line) => {
+        this.getBlockLines(id, { speed, gravity, jumpForce, backgroundColor }).forEach((line) => {
           lines.push(`${startSeen ? "        " : "    "}${line}`);
         });
       });
@@ -87,7 +88,7 @@
         setSpeed: `définir vitesse = ${settings.speed}`,
         setGravity: `définir gravité = ${settings.gravity}`,
         setJumpForce: `définir force_saut = ${settings.jumpForce}`,
-        addBackground: "ajouter le fond",
+        addBackground: `ajouter le fond couleur ${settings.backgroundColor}`,
         addPlayer: "ajouter le joueur",
         addGround: "ajouter le sol",
         addObstacles: "ajouter les obstacles du niveau",

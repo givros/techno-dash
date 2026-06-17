@@ -4,17 +4,17 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=1280, initial-scale=1">
     <title>Coder TechnoDash</title>
-    <link rel="stylesheet" href="styles/main.css?v=tabs-34">
-    <script defer src="vendor/phaser/phaser.min.js?v=tabs-34"></script>
-    <script defer src="src/game/DecorCatalog.js?v=tabs-34"></script>
-    <script defer src="src/game/Player.js?v=tabs-34"></script>
-    <script defer src="src/game/Level.js?v=tabs-34"></script>
-    <script defer src="src/game/CollisionManager.js?v=tabs-34"></script>
-    <script defer src="src/game/GameScene.js?v=tabs-34"></script>
-    <script defer src="src/editor/PseudoCodeGenerator.js?v=tabs-34"></script>
-    <script defer src="src/editor/BlockEditor.js?v=tabs-34"></script>
-    <script defer src="src/editor/LevelEditor.js?v=tabs-34"></script>
-    <script defer src="src/main.js?v=tabs-34"></script>
+    <link rel="stylesheet" href="styles/main.css?v=tabs-35">
+    <script defer src="vendor/phaser/phaser.min.js?v=tabs-35"></script>
+    <script defer src="src/game/DecorCatalog.js?v=tabs-35"></script>
+    <script defer src="src/game/Player.js?v=tabs-35"></script>
+    <script defer src="src/game/Level.js?v=tabs-35"></script>
+    <script defer src="src/game/CollisionManager.js?v=tabs-35"></script>
+    <script defer src="src/game/GameScene.js?v=tabs-35"></script>
+    <script defer src="src/editor/PseudoCodeGenerator.js?v=tabs-35"></script>
+    <script defer src="src/editor/BlockEditor.js?v=tabs-35"></script>
+    <script defer src="src/editor/LevelEditor.js?v=tabs-35"></script>
+    <script defer src="src/main.js?v=tabs-35"></script>
   </head>
   <body>
     <div class="desktop-warning">
@@ -176,6 +176,7 @@
                     <small>supprimer</small>
                   </button>
                 </div>
+                <div id="block-color-panel" class="block-color-panel" aria-label="Couleurs des blocs"></div>
               </section>
 
               <section class="side-section">
@@ -194,6 +195,10 @@
                   <label>
                     Force de saut
                     <input id="jump-input" type="number" min="260" max="900" step="10" value="560">
+                  </label>
+                  <label>
+                    Couleur du fond
+                    <input id="background-color-input" type="color" value="#121722">
                   </label>
                 </div>
               </section>

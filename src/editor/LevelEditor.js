@@ -15,7 +15,10 @@
       this.grid = document.getElementById("level-grid");
       this.scrollContainer = document.getElementById("level-scroll");
       this.toolPalette = document.querySelector(".level-tool-palette");
+      this.colorPanel = document.getElementById("block-color-panel");
+      this.selectedColors = this.getDefaultSelectedColors();
       this.renderDecorationTools();
+      this.renderColorControls();
       this.toolButtons = [...document.querySelectorAll(".tool-button")];
       this.deleteButton = document.getElementById("delete-obstacle-button");
       this.clearButton = document.getElementById("clear-level-button");
@@ -24,6 +27,7 @@
       this.speedInput = document.getElementById("speed-input");
       this.gravityInput = document.getElementById("gravity-input");
       this.jumpInput = document.getElementById("jump-input");
+      this.backgroundColorInput = document.getElementById("background-color-input");
       this.preview = null;
       this.bindEvents();
       this.preview = this.createPlacementPreview();
@@ -68,11 +72,59 @@
       return button;
     }
 
+    getDefaultSelectedColors() {
+      return Object.fromEntries(
+        Object.keys(window.TechnoDash.Level.getColorPalettes()).map((type) => [
+          type,
+          window.TechnoDash.Level.getDefaultColorForType(type)
+        ])
+      );
+    }
+
+    renderColorControls() {
+      if (!this.colorPanel) {
+        return;
+      }
+
+      this.colorPanel.innerHTML = "";
+      const title = document.createElement("div");
+      title.className = "block-color-title";
+      title.textContent = "Couleurs";
+      this.colorPanel.appendChild(title);
+
+      Object.entries(window.TechnoDash.Level.getColorPalettes()).forEach(([type, colors]) => {
+        const group = document.createElement("div");
+        group.className = "block-color-group";
+        group.dataset.colorType = type;
+
+        const label = document.createElement("span");
+        label.textContent = this.getShortTypeLabel(type);
+        group.appendChild(label);
+
+        const swatches = document.createElement("div");
+        swatches.className = "block-color-swatches";
+        colors.forEach((colorInfo) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "block-color-option";
+          button.dataset.colorType = type;
+          button.dataset.color = colorInfo.color;
+          button.setAttribute("aria-label", `${this.getShortTypeLabel(type)} ${colorInfo.name}`);
+          this.applyColorStyle(button, type, colorInfo.color);
+          button.addEventListener("click", () => this.chooseColor(type, colorInfo.color));
+          swatches.appendChild(button);
+        });
+        group.appendChild(swatches);
+        this.colorPanel.appendChild(group);
+      });
+
+      this.refreshColorControls();
+    }
+
     bindEvents() {
       this.toolButtons.forEach((button) => {
         button.addEventListener("click", () => {
-          this.selectedTool = button.dataset.tool;
-          this.toolButtons.forEach((item) => item.classList.toggle("is-active", item === button));
+          this.setSelectedTool(button.dataset.tool);
           this.hidePlacementPreview();
         });
       });
@@ -98,7 +150,7 @@
 
       this.deleteButton.addEventListener("click", () => this.deleteSelectedObstacle());
       this.clearButton.addEventListener("click", () => this.clearLevel());
-      [this.speedInput, this.gravityInput, this.jumpInput].forEach((input) => {
+      [this.speedInput, this.gravityInput, this.jumpInput, this.backgroundColorInput].forEach((input) => {
         input.addEventListener("input", () => this.updateSettingsFromInputs());
       });
     }
@@ -152,6 +204,9 @@
           width: dimensions.width,
           height: dimensions.height
         };
+        if (window.TechnoDash.Level.isColorableObstacle(obstacle.type)) {
+          obstacle.color = this.getSelectedColor(obstacle.type);
+        }
         this.levelData.obstacles.push(obstacle);
         this.selectedObstacleId = obstacle.id;
       }
@@ -175,6 +230,11 @@
 
     selectObstacle(id) {
       this.selectedObstacleId = id;
+      const selected = this.findElementById(id);
+      if (selected && window.TechnoDash.Level.isColorableObstacle(selected.type)) {
+        this.selectedColors[selected.type] = selected.color || window.TechnoDash.Level.getDefaultColorForType(selected.type);
+        this.setSelectedTool(selected.type);
+      }
       this.render();
     }
 
@@ -200,7 +260,8 @@
       this.levelData.settings = {
         speed: Number(this.speedInput.value),
         gravity: Number(this.gravityInput.value),
-        jumpForce: Number(this.jumpInput.value)
+        jumpForce: Number(this.jumpInput.value),
+        backgroundColor: this.backgroundColorInput.value
       };
       this.commitChange();
     }
@@ -239,6 +300,7 @@
         button.dataset.kind = "obstacle";
         button.style.left = `${obstacle.x * this.pixelsPerLevelUnit}px`;
         button.style.bottom = `${this.getGridBottomForY(obstacle.y)}px`;
+        this.applyColorStyle(button, obstacle.type, obstacle.color);
         this.applyObstacleSize(button, obstacle);
         button.setAttribute("aria-label", this.getObstacleLabel(obstacle));
         this.grid.appendChild(button);
@@ -288,7 +350,8 @@
         type: decorationType || this.selectedTool,
         width: dimensions.width,
         height: dimensions.height,
-        y: point.y
+        y: point.y,
+        color: decorationType ? null : this.getSelectedColor(this.selectedTool)
       };
 
       this.preview.hidden = false;
@@ -296,6 +359,7 @@
       this.preview.dataset.kind = decorationType ? "decoration" : "obstacle";
       this.preview.style.left = `${point.x * this.pixelsPerLevelUnit}px`;
       this.preview.style.bottom = `${this.getGridBottomForY(point.y)}px`;
+      this.applyColorStyle(this.preview, previewObstacle.type, previewObstacle.color);
       this.applyObstacleSize(this.preview, previewObstacle);
     }
 
@@ -335,6 +399,9 @@
       this.speedInput.value = this.levelData.settings.speed;
       this.gravityInput.value = this.levelData.settings.gravity;
       this.jumpInput.value = this.levelData.settings.jumpForce;
+      this.backgroundColorInput.value = this.levelData.settings.backgroundColor;
+      this.refreshToolColors();
+      this.refreshColorControls();
     }
 
     getObstacleLabel(obstacle) {
@@ -350,7 +417,87 @@
         solidBlock: "Bloc solide",
         finish: "Arrivée"
       };
-      return `${names[obstacle.type]} à ${Math.round(obstacle.x)} px / hauteur ${Math.round(obstacle.y || 0)} px`;
+      const color = window.TechnoDash.Level.getObstacleColorStyle(obstacle.type, obstacle.color);
+      const colorName = color ? ` ${color.name}` : "";
+      return `${names[obstacle.type]}${colorName} à ${Math.round(obstacle.x)} px / hauteur ${Math.round(obstacle.y || 0)} px`;
+    }
+
+    getShortTypeLabel(type) {
+      const labels = {
+        block: "Bloc danger",
+        platform: "Plateforme",
+        solidBlock: "Bloc solide"
+      };
+      return labels[type] || type;
+    }
+
+    getSelectedColor(type) {
+      if (!window.TechnoDash.Level.isColorableObstacle(type)) {
+        return null;
+      }
+
+      return this.selectedColors[type] || window.TechnoDash.Level.getDefaultColorForType(type);
+    }
+
+    chooseColor(type, color) {
+      this.selectedColors[type] = color;
+      this.setSelectedTool(type);
+
+      const selected = this.findElementById(this.selectedObstacleId);
+      if (selected && selected.type === type) {
+        selected.color = color;
+        this.commitChange();
+        return;
+      }
+
+      this.refreshToolColors();
+      this.refreshColorControls();
+    }
+
+    setSelectedTool(tool) {
+      this.selectedTool = tool;
+      this.toolButtons.forEach((item) => {
+        item.classList.toggle("is-active", item.dataset.tool === tool);
+      });
+      this.refreshColorControls();
+    }
+
+    refreshToolColors() {
+      if (!this.toolPalette) {
+        return;
+      }
+
+      Object.keys(window.TechnoDash.Level.getColorPalettes()).forEach((type) => {
+        const swatch = this.toolPalette.querySelector(`.tool-swatch[data-type="${type}"]`);
+        if (swatch) {
+          this.applyColorStyle(swatch, type, this.getSelectedColor(type));
+        }
+      });
+    }
+
+    refreshColorControls() {
+      if (!this.colorPanel) {
+        return;
+      }
+
+      this.colorPanel.querySelectorAll(".block-color-option").forEach((button) => {
+        const type = button.dataset.colorType;
+        const color = button.dataset.color;
+        const active = this.selectedTool === type && this.getSelectedColor(type) === color;
+        button.classList.toggle("is-active", active);
+      });
+    }
+
+    applyColorStyle(element, type, color) {
+      const style = window.TechnoDash.Level.getObstacleColorStyle(type, color);
+      if (!style) {
+        return;
+      }
+
+      element.style.setProperty("--object-color", style.color);
+      element.style.setProperty("--object-accent", style.accent);
+      element.style.setProperty("--object-stroke", style.stroke);
+      element.style.setProperty("--object-danger", style.danger);
     }
 
     getDecorationTypeFromTool(tool) {
