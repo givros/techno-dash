@@ -110,14 +110,21 @@ button {
 
 .tab-button,
 .top-actions button,
+.top-actions .load-level-button,
 .secondary-button {
   min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 0 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
   color: var(--ink);
+  cursor: pointer;
   font-weight: 800;
+  text-decoration: none;
+  user-select: none;
 }
 
 .tab-button.is-active,
@@ -131,7 +138,8 @@ button {
   justify-content: flex-end;
 }
 
-.top-actions button {
+.top-actions button,
+.top-actions .load-level-button {
   padding: 0 9px;
 }
 

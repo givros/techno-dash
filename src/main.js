@@ -83,6 +83,32 @@
     let isResettingWorkspace = false;
     let isSyncingSettings = false;
 
+    const playableProgramState = {
+      activeBlockIds: [
+        "addBackground",
+        "addPlayer",
+        "addGround",
+        "addObstacles",
+        "addDecorations",
+        "addFinish",
+        "loop",
+        "moveLevel",
+        "applyGravity",
+        "spacePressed",
+        "playerGrounded",
+        "jump",
+        "hitObstacle",
+        "showGameOver",
+        "reachFinish",
+        "showVictory",
+        "showDistance",
+        "showScore",
+        "restartGame"
+      ],
+      blockSections: {},
+      hasDefaultStart: true
+    };
+
     const switchTab = (tabName) => {
       tabButtons.forEach((button) => {
         button.classList.toggle("is-active", button.dataset.tab === tabName);
@@ -99,6 +125,10 @@
     };
 
     const readSettings = () => currentLevelData.settings;
+
+    const getGameProgramState = () => currentGameMode === "play"
+      ? playableProgramState
+      : currentProgramState;
 
     const updateLevelNameDisplay = () => {
       levelNameLabel.textContent = `Niveau : ${currentLevelName}`;
@@ -242,7 +272,7 @@
 
       gameScene = new window.TechnoDash.GameScene();
       gameScene.setCallbacks({ onStats: updateGameStats });
-      gameScene.setProgramState(currentProgramState);
+      gameScene.setProgramState(getGameProgramState());
       gameScene.loadLevel(currentLevelData, { play: false });
       game = new Phaser.Game({
         type: Phaser.AUTO,
@@ -263,7 +293,7 @@
         return;
       }
 
-      gameScene.setProgramState(currentProgramState);
+      gameScene.setProgramState(getGameProgramState());
       gameScene.loadLevel(currentLevelData, { play: Boolean(keepPlaying && gameScene.isPlaying()) });
     };
 
@@ -286,7 +316,7 @@
       status.textContent = `Partie : ${currentLevelName}`;
 
       window.setTimeout(() => {
-        gameScene.setProgramState(currentProgramState);
+        gameScene.setProgramState(playableProgramState);
         gameScene.loadLevel(currentLevelData, { play: true });
       }, 80);
     };
@@ -351,9 +381,15 @@
       status.textContent = `Niveau téléchargé : ${levelName}`;
     };
 
-    const parseLevelFile = (raw, fallbackName) => {
+    const parseLevelFile = (raw, file) => {
+      const fileName = sanitizeLevelName(file && file.name ? file.name : defaultLevelName);
+
       try {
         const payload = JSON.parse(raw);
+        if (payload && payload.type && payload.type !== "technodash-level") {
+          throw new Error("Ce JSON n'est pas un niveau TechnoDash");
+        }
+
         const source = payload && payload.level ? payload.level : payload;
         if (!source || typeof source !== "object" || !Array.isArray(source.obstacles)) {
           throw new Error("Format de niveau invalide");
@@ -361,7 +397,9 @@
 
         return {
           level: window.TechnoDash.Level.normalize(source),
-          name: sanitizeLevelName(payload && payload.name ? payload.name : fallbackName)
+          name: fileName,
+          internalName: sanitizeLevelName(payload && (payload.name || payload.levelName) ? (payload.name || payload.levelName) : fileName),
+          fileName: file && file.name ? file.name : `${fileName}.json`
         };
       } catch (error) {
         console.warn("Niveau illisible", error);
@@ -374,11 +412,17 @@
         return;
       }
 
+      if (!file.name.toLowerCase().endsWith(".json")) {
+        status.textContent = "Choisis un fichier .json TechnoDash";
+        return;
+      }
+
+      status.textContent = `Lecture du fichier : ${file.name}`;
       const reader = new FileReader();
       reader.addEventListener("load", () => {
-        const loaded = parseLevelFile(String(reader.result || ""), file.name);
+        const loaded = parseLevelFile(String(reader.result || ""), file);
         if (!loaded) {
-          status.textContent = "Niveau illisible";
+          status.textContent = `Fichier refusé : ${file.name}`;
           return;
         }
 
@@ -387,8 +431,13 @@
         resetValidation("Niveau chargé. Valide-le si tu veux le télécharger à nouveau.");
         setGameMode("play");
         autoSaveWorkspace();
-        status.textContent = `Niveau chargé : ${currentLevelName}`;
+        status.textContent = loaded.internalName === loaded.name
+          ? `Niveau chargé : ${loaded.fileName}`
+          : `Niveau chargé : ${loaded.fileName} (${loaded.internalName})`;
         startLoadedGame();
+      });
+      reader.addEventListener("error", () => {
+        status.textContent = `Impossible de lire : ${file.name}`;
       });
       reader.readAsText(file);
     };
@@ -505,10 +554,22 @@
     });
     loadLevelButton.addEventListener("click", () => {
       levelFileInput.value = "";
+    });
+    loadLevelButton.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") {
+        return;
+      }
+
+      event.preventDefault();
+      levelFileInput.value = "";
       levelFileInput.click();
     });
     levelFileInput.addEventListener("change", () => {
-      loadLevelFromFile(levelFileInput.files[0]);
+      const selectedFile = levelFileInput.files && levelFileInput.files[0]
+        ? levelFileInput.files[0]
+        : null;
+      loadLevelFromFile(selectedFile);
+      levelFileInput.value = "";
     });
   });
 })();
