@@ -5,12 +5,14 @@
     constructor(scene, x, groundY) {
       this.scene = scene;
       this.x = x;
-      this.size = 38;
+      this.size = window.TechnoDash.Level.getPlayerSize();
       this.groundY = groundY;
       this.y = groundY - this.size / 2;
       this.velocityY = 0;
       this.grounded = true;
       this.sprite = this.scene.add.rectangle(this.x, this.y, this.size, this.size, 0x31c48d);
+      this.sprite.setSize(this.size, this.size);
+      this.sprite.setDisplaySize(this.size, this.size);
       this.sprite.setStrokeStyle(3, 0xffffff, 0.95);
       this.sprite.setDepth(10);
     }

@@ -9,12 +9,12 @@
       this.created = false;
       this.running = false;
       this.ended = false;
-      this.status = "Prêt";
+      this.status = "Ready";
       this.distance = 0;
       this.score = 0;
       this.reachedFinish = false;
       this.spaceWasDown = false;
-      this.rWasDown = false;
+      this.restartWasDown = false;
       this.jumpQueued = false;
       this.restartQueued = false;
       this.pendingPlay = false;
@@ -81,15 +81,23 @@
     create() {
       this.worldWidth = this.scale.width;
       this.worldHeight = this.scale.height;
-      this.groundY = this.worldHeight - 64;
-      this.playerX = 110;
+      this.tileSize = window.TechnoDash.Level.getTileSize();
+      this.groundY = this.worldHeight - this.tileSize;
+      this.playerX = this.tileSize * 3 + this.tileSize / 2;
       this.level = new window.TechnoDash.Level(this.levelData);
+      this.backgroundGraphics = this.add.graphics();
+      this.backgroundGraphics.setDepth(0);
       this.levelGraphics = this.add.graphics();
+      this.levelGraphics.setDepth(2);
       this.player = new window.TechnoDash.Player(this, this.playerX, this.groundY);
       this.syncProgramVisuals();
       this.keys = this.input.keyboard.addKeys({
         space: Phaser.Input.Keyboard.KeyCodes.SPACE,
+        enter: Phaser.Input.Keyboard.KeyCodes.ENTER,
         r: Phaser.Input.Keyboard.KeyCodes.R
+      });
+      this.input.keyboard.on("keydown-ENTER", () => {
+        this.restartQueued = true;
       });
       this.handleGlobalKeydown = (event) => this.onGlobalKeydown(event);
       window.addEventListener("keydown", this.handleGlobalKeydown);
@@ -152,13 +160,13 @@
       }
 
       this.running = true;
-      this.status = "En cours";
+      this.status = "Playing";
       this.publishState();
     }
 
     stop() {
       this.running = false;
-      this.status = this.ended ? this.status : "Pause";
+      this.status = this.ended ? this.status : "Paused";
       this.publishState();
     }
 
@@ -169,9 +177,9 @@
       this.reachedFinish = false;
       this.ended = false;
       this.running = Boolean(shouldPlay);
-      this.status = shouldPlay ? "En cours" : "Prêt";
+      this.status = shouldPlay ? "Playing" : "Ready";
       this.spaceWasDown = false;
-      this.rWasDown = false;
+      this.restartWasDown = false;
       this.jumpQueued = false;
       this.restartQueued = false;
       this.player.reset(this.getRuntimeSettings());
@@ -188,16 +196,14 @@
         return;
       }
 
-      const resetDown = this.keys.r.isDown;
-      const resetTriggered = (resetDown && !this.rWasDown) || this.restartQueued;
-      if (resetTriggered && this.hasLoopBlock("restartGame")) {
-        this.restartQueued = false;
-        this.rWasDown = resetDown;
-        this.reset(true);
+      const restartDown = this.keys.r.isDown || this.keys.enter.isDown || (this.ended && this.keys.space.isDown);
+      const restartTriggered = (restartDown && !this.restartWasDown) || this.restartQueued;
+      if (restartTriggered) {
+        this.restartFromInput(restartDown);
         return;
       }
       this.restartQueued = false;
-      this.rWasDown = resetDown;
+      this.restartWasDown = restartDown;
 
       if (this.running && !this.ended) {
         const settings = this.getRuntimeSettings();
@@ -224,13 +230,18 @@
           this.player.update(deltaSeconds, settings, { applyGravity });
           this.resolvePlatformCollisions(previousPlayerBounds);
         }
-        const playerStoppedByLevel = this.resolveSolidBlockSideCollisions(previousScrollX);
+        const reachedFinish = this.checkFinishCollision(inputContext);
+        const playerStoppedByLevel = reachedFinish
+          ? false
+          : this.resolveSolidBlockSideCollisions(previousScrollX);
 
         this.jumpQueued = false;
         this.spaceWasDown = spaceDown;
         this.distance = Math.max(0, Math.floor(this.scrollX));
         this.score = this.distance;
-        if (playerStoppedByLevel) {
+        if (reachedFinish) {
+          // Victory has priority when the cube reaches the finish on the same frame as another collision.
+        } else if (playerStoppedByLevel) {
           this.endGame("Game Over");
         } else {
           this.checkCollisions(inputContext);
@@ -242,6 +253,14 @@
 
       this.renderWorld();
       this.publishState();
+    }
+
+    restartFromInput(restartDown) {
+      this.restartQueued = false;
+      this.reset(true);
+      this.restartWasDown = Boolean(restartDown);
+      this.spaceWasDown = Boolean(this.keys && this.keys.space && this.keys.space.isDown);
+      this.jumpQueued = false;
     }
 
     getRuntimeSettings() {
@@ -287,24 +306,34 @@
     onGlobalKeydown(event) {
       if (event.code === "Space" || event.key === " ") {
         event.preventDefault();
-        this.jumpQueued = true;
+        if (this.ended) {
+          this.restartQueued = true;
+        } else {
+          this.jumpQueued = true;
+        }
         return;
       }
 
-      if (event.code === "KeyR" || event.key === "r" || event.key === "R") {
+      const isEnter = event.code === "Enter"
+        || event.code === "NumpadEnter"
+        || event.key === "Enter"
+        || event.key === "Return"
+        || event.keyCode === 13
+        || event.which === 13;
+      if (isEnter || event.code === "KeyR" || event.key === "r" || event.key === "R") {
         event.preventDefault();
         this.restartQueued = true;
       }
     }
 
     checkCollisions(inputContext = {}) {
-      const screenObjects = this.level.getScreenObjects(this.scrollX, this.playerX, this.groundY);
+      const screenObjects = this.level.getScreenObjects(this.scrollX, this.groundY);
       const playerBounds = this.player.getBounds();
-      const hit = this.programFeatures.player && this.programFeatures.obstacles
-        ? window.TechnoDash.CollisionManager.findObstacleCollision(playerBounds, screenObjects)
-        : null;
       const finish = this.programFeatures.player && this.programFeatures.finish
         ? window.TechnoDash.CollisionManager.findFinishCollision(playerBounds, screenObjects)
+        : null;
+      const hit = this.programFeatures.player && this.programFeatures.obstacles
+        ? window.TechnoDash.CollisionManager.findObstacleCollision(playerBounds, screenObjects)
         : null;
       this.reachedFinish = Boolean(finish);
       const context = {
@@ -313,14 +342,44 @@
         reachFinish: Boolean(finish)
       };
 
+      if (finish && this.shouldRunAction("showVictory", context)) {
+        this.endGame("Victory");
+        return;
+      }
+
       if (this.shouldRunAction("showGameOver", context)) {
         this.endGame("Game Over");
         return;
       }
 
-      if (this.shouldRunAction("showVictory", context)) {
-        this.endGame("Victoire");
+    }
+
+    checkFinishCollision(inputContext = {}) {
+      if (!this.programFeatures.player || !this.programFeatures.finish) {
+        this.reachedFinish = false;
+        return false;
       }
+
+      const finish = window.TechnoDash.CollisionManager.findFinishCollision(
+        this.player.getBounds(),
+        this.level.getScreenObjects(this.scrollX, this.groundY)
+      );
+      this.reachedFinish = Boolean(finish);
+      if (!finish) {
+        return false;
+      }
+
+      const context = {
+        ...inputContext,
+        hitObstacle: false,
+        reachFinish: true
+      };
+      if (!this.shouldRunAction("showVictory", context)) {
+        return false;
+      }
+
+      this.endGame("Victory");
+      return true;
     }
 
     resolvePlatformCollisions(previousPlayerBounds) {
@@ -328,7 +387,7 @@
         return;
       }
 
-      const screenObjects = this.level.getScreenObjects(this.scrollX, this.playerX, this.groundY);
+      const screenObjects = this.level.getScreenObjects(this.scrollX, this.groundY);
       const platform = window.TechnoDash.CollisionManager.findPlatformLanding(
         this.player.getBounds(),
         previousPlayerBounds,
@@ -346,7 +405,7 @@
         return false;
       }
 
-      const screenObjects = this.level.getScreenObjects(this.scrollX, this.playerX, this.groundY);
+      const screenObjects = this.level.getScreenObjects(this.scrollX, this.groundY);
       const solidBlock = window.TechnoDash.CollisionManager.findSolidBlockSideCollision(
         this.player.getBounds(),
         screenObjects
@@ -361,7 +420,7 @@
         return false;
       }
 
-      // Regle Geometry Dash : atterrir dessus est autorise, etre bloque par le cote termine la partie.
+      // Geometry Dash rule: landing on top is safe, being blocked from the side ends the run.
       this.scrollX = Math.max(previousScrollX, this.scrollX - penetration - 0.5);
       return true;
     }
@@ -374,21 +433,23 @@
     }
 
     renderWorld() {
-      if (!this.levelGraphics) {
+      if (!this.backgroundGraphics || !this.levelGraphics) {
         return;
       }
 
+      const backgroundGraphics = this.backgroundGraphics;
       const graphics = this.levelGraphics;
       const settings = this.getRuntimeSettings();
+      backgroundGraphics.clear();
       graphics.clear();
-      graphics.fillStyle(window.TechnoDash.Level.hexToNumber(settings.backgroundColor, 0x121722), 1);
-      graphics.fillRect(0, 0, this.worldWidth, this.worldHeight);
+      backgroundGraphics.fillStyle(window.TechnoDash.Level.hexToNumber(settings.backgroundColor, 0x071322), 1);
+      backgroundGraphics.fillRect(0, 0, this.worldWidth, this.worldHeight);
 
       if (this.programFeatures.background) {
-        this.drawBackgroundGrid(graphics);
+        this.drawBackgroundGrid(backgroundGraphics);
       }
       if (this.programFeatures.ground) {
-        this.drawGround(graphics);
+        this.drawGround(backgroundGraphics);
       }
       this.renderDecorations();
       this.drawLevelObjects(graphics);
@@ -406,10 +467,10 @@
       }
 
       const visibleIds = new Set();
-      const decorations = this.level.getScreenDecorations(this.scrollX, this.playerX, this.groundY);
+      const decorations = this.level.getScreenDecorations(this.scrollX, this.groundY);
       decorations.forEach((decoration) => {
         const key = GameScene.getDecorationTextureKey(decoration.type);
-        const isNearScreen = decoration.right > -80 && decoration.left < this.worldWidth + 120;
+        const isNearScreen = decoration.right > -160 && decoration.left < this.worldWidth + 160;
         if (!isNearScreen || !this.textures.exists(key)) {
           return;
         }
@@ -418,7 +479,7 @@
         if (!sprite) {
           sprite = this.add.image(decoration.screenX, decoration.bottom, key);
           sprite.setOrigin(0.5, 1);
-          sprite.setDepth(4);
+          sprite.setDepth(1);
           this.decorSprites.set(decoration.id, sprite);
         } else if (sprite.texture.key !== key) {
           sprite.setTexture(key);
@@ -439,11 +500,12 @@
 
     drawBackgroundGrid(graphics) {
       graphics.lineStyle(1, 0x253045, 0.75);
-      const offset = Math.floor(this.scrollX % 48);
-      for (let x = -offset; x < this.worldWidth + 48; x += 48) {
+      const tileSize = this.tileSize || window.TechnoDash.Level.getTileSize();
+      const offset = Math.floor(this.scrollX % tileSize);
+      for (let x = -offset; x < this.worldWidth + tileSize; x += tileSize) {
         graphics.lineBetween(x, 0, x, this.worldHeight);
       }
-      for (let y = 42; y < this.groundY; y += 42) {
+      for (let y = this.groundY % tileSize; y < this.groundY; y += tileSize) {
         graphics.lineBetween(0, y, this.worldWidth, y);
       }
     }
@@ -456,7 +518,7 @@
     }
 
     drawLevelObjects(graphics) {
-      const screenObjects = this.level.getScreenObjects(this.scrollX, this.playerX, this.groundY);
+      const screenObjects = this.level.getScreenObjects(this.scrollX, this.groundY);
 
       screenObjects.forEach((object) => {
         if (object.type === "finish" && !this.programFeatures.finish) {
@@ -490,14 +552,10 @@
           return;
         }
 
-        if (object.type === "solidBlock") {
+        if (window.TechnoDash.Level.isSolidBlockType(object.type)) {
           const colors = window.TechnoDash.Level.getObstacleColorStyle(object.type, object.color);
           graphics.fillStyle(window.TechnoDash.Level.hexToNumber(colors.color, 0x5aa7e8), 1);
           graphics.fillRect(object.left, object.top, object.width, object.height);
-          graphics.fillStyle(window.TechnoDash.Level.hexToNumber(colors.accent, 0x9bd0ff), 1);
-          graphics.fillRect(object.left + 5, object.top + 5, object.width - 10, 8);
-          graphics.lineStyle(2, window.TechnoDash.Level.hexToNumber(colors.stroke, 0x1f5f93), 0.9);
-          graphics.strokeRect(object.left, object.top, object.width, object.height);
           return;
         }
 
@@ -505,10 +563,6 @@
           const colors = window.TechnoDash.Level.getObstacleColorStyle(object.type, object.color);
           graphics.fillStyle(window.TechnoDash.Level.hexToNumber(colors.color, 0x35b6a6), 1);
           graphics.fillRect(object.left, object.top, object.width, object.height);
-          graphics.fillStyle(window.TechnoDash.Level.hexToNumber(colors.accent, 0x7ee4d6), 1);
-          graphics.fillRect(object.left, object.top, object.width, 6);
-          graphics.lineStyle(2, window.TechnoDash.Level.hexToNumber(colors.stroke, 0x0f5f59), 0.9);
-          graphics.strokeRect(object.left, object.top, object.width, object.height);
           return;
         }
 
@@ -519,7 +573,7 @@
     drawFinish(graphics, object) {
       graphics.fillStyle(0xffffff, 1);
       graphics.fillRect(object.left, object.top, object.width, object.height);
-      const stripeSize = 14;
+      const stripeSize = 8;
       for (let y = object.top; y < object.bottom; y += stripeSize) {
         for (let x = object.left; x < object.right; x += stripeSize) {
           const column = Math.floor((x - object.left) / stripeSize);

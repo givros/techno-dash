@@ -1,255 +1,529 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=1280, initial-scale=1">
-    <title>Coder TechnoDash</title>
-    <link rel="stylesheet" href="styles/main.css?v=tabs-35">
-    <script defer src="vendor/phaser/phaser.min.js?v=tabs-35"></script>
-    <script defer src="src/game/DecorCatalog.js?v=tabs-35"></script>
-    <script defer src="src/game/Player.js?v=tabs-35"></script>
-    <script defer src="src/game/Level.js?v=tabs-35"></script>
-    <script defer src="src/game/CollisionManager.js?v=tabs-35"></script>
-    <script defer src="src/game/GameScene.js?v=tabs-35"></script>
-    <script defer src="src/editor/PseudoCodeGenerator.js?v=tabs-35"></script>
-    <script defer src="src/editor/BlockEditor.js?v=tabs-35"></script>
-    <script defer src="src/editor/LevelEditor.js?v=tabs-35"></script>
-    <script defer src="src/main.js?v=tabs-35"></script>
+    <meta name="viewport" content="width=1440, initial-scale=1">
+    <title>Dash Maker</title>
+    <link rel="stylesheet" href="styles/main.css?v=maker-19">
+    <script defer src="vendor/phaser/phaser.min.js?v=maker-3"></script>
+    <script defer src="src/game/DecorCatalog.js?v=maker-1"></script>
+    <script defer src="src/game/Player.js?v=maker-3"></script>
+    <script defer src="src/game/Level.js?v=maker-7"></script>
+    <script defer src="src/game/CollisionManager.js?v=maker-4"></script>
+    <script defer src="src/game/GameScene.js?v=maker-13"></script>
+    <script defer src="src/editor/LevelEditor.js?v=maker-9"></script>
+    <script defer src="src/storage/SupabaseManager.js?v=maker-4"></script>
+    <script defer src="src/main.js?v=maker-29"></script>
   </head>
   <body>
     <div class="desktop-warning">
-      Atelier prévu pour un ordinateur.
+      Dash Maker is designed for a desktop computer.
     </div>
 
-    <div class="app-shell">
-      <header class="topbar">
-        <div class="brand">
-          <span class="brand-mark">TD</span>
-          <div>
-            <h1>Coder TechnoDash</h1>
-            <p>Coder, tester, puis créer le niveau</p>
+    <section id="home-view" class="community-home" hidden aria-label="Community levels">
+      <header class="community-header">
+        <button id="community-brand-home-button" class="brand brand-button community-brand" type="button" aria-label="Community home">
+          <span class="brand-mark" aria-hidden="true">
+            <span class="brand-diamond"></span>
+          </span>
+          <div class="brand-copy">
+            <h1>Dash Maker</h1>
+            <p>Community levels</p>
           </div>
-        </div>
-
-        <nav class="tab-nav" aria-label="Sections de l'atelier">
-          <button class="tab-button is-active" type="button" data-tab="code">Code</button>
-          <button class="tab-button" type="button" data-tab="game">Jeu</button>
-          <button class="tab-button" type="button" data-tab="level">Level design</button>
-        </nav>
-
-        <nav class="top-actions" aria-label="Actions du projet">
-          <button id="test-button" class="test-action" type="button">Tester</button>
-          <button id="reset-program-button" type="button">Remettre à zéro</button>
-          <button id="validate-level-button" class="validate-action" type="button">Valider le niveau</button>
-          <label id="load-level-button" class="load-level-button" for="level-file-input" role="button" tabindex="0">Charger niveau</label>
-        </nav>
-
-        <div class="status-stack" aria-live="polite">
-          <p id="level-name-label" class="level-name-label">Niveau : sans nom</p>
-          <p id="program-status" class="program-status">Programme de base</p>
+        </button>
+        <div class="community-actions">
+          <button id="refresh-community-button" class="secondary-action" type="button">Refresh</button>
+          <button id="open-editor-button" class="publish-action" type="button">Open editor</button>
         </div>
       </header>
 
-      <main class="tab-shell">
-        <section id="code-tab" class="tab-page is-active" data-page="code" aria-label="Code">
-          <div class="coding-workspace">
-            <aside class="panel palette-panel" aria-label="Palette de blocs">
-              <div class="panel-heading">
-                <h2>Blocs</h2>
-              </div>
-              <div id="category-tabs" class="category-tabs" role="tablist"></div>
-              <div id="block-library" class="block-library" aria-live="polite"></div>
-            </aside>
-
-            <section class="panel script-panel" aria-label="Programme du jeu">
-              <div class="panel-heading">
-                <h2>Programme du jeu</h2>
-                <span id="program-count" class="program-count">0 blocs</span>
-              </div>
-              <div id="program-area" class="program-area"></div>
-              <p id="block-hint" class="status-line" aria-live="polite"></p>
-            </section>
-
-            <aside class="panel side-panel" aria-label="Pseudo-code">
-              <section class="side-section pseudo-section">
-                <div class="section-title">
-                  <h2>Pseudo-code</h2>
-                </div>
-                <pre id="pseudocode-output" class="pseudocode-output"></pre>
-              </section>
-
-              <section class="side-section rules-section">
-                <div class="section-title">
-                  <h2>Guidage</h2>
-                </div>
-                <ul class="rule-list">
-                  <li>Le départ du jeu est intégré au programme.</li>
-                  <li>Gameplay : ajoute la boucle, les conditions et les actions.</li>
-                  <li>Les blocs restent libres, le test montre ce qui fonctionne.</li>
-                  <li>Teste souvent, observe, puis améliore ton programme.</li>
-                </ul>
-              </section>
-            </aside>
+      <main class="community-shell">
+        <section class="community-intro">
+          <div>
+            <h2>Play community levels</h2>
+            <p id="community-status">Loading published levels...</p>
           </div>
         </section>
 
-        <section id="game-tab" class="tab-page" data-page="game" aria-label="Jeu">
-          <div class="game-workspace">
-            <section id="game-panel" class="panel game-panel" data-mode="test">
-              <div class="panel-heading">
-                <h2 id="game-title">Test du jeu</h2>
-                <div class="game-actions">
-                  <button id="play-button" class="test-action" type="button">Tester</button>
-                  <button id="stop-button" type="button">Stop</button>
-                  <button id="reset-button" type="button">Reset</button>
-                </div>
-              </div>
-              <div class="game-frame">
-                <div id="game-container"></div>
-                <div id="game-message" class="game-message">Prêt</div>
-              </div>
-              <div class="game-footer">
-                <span id="game-state-label">Prêt</span>
-                <span>Distance <strong id="distance-value">0</strong></span>
-                <span>Score <strong id="score-value">0</strong></span>
-                <span>Espace : saut</span>
-                <span>R : reset</span>
-              </div>
-            </section>
-          </div>
-        </section>
-
-        <section id="level-tab" class="tab-page" data-page="level" aria-label="Level design">
-          <div class="level-workspace">
-            <section class="panel level-panel">
-              <div class="panel-heading">
-                <h2>Level design</h2>
-                <span id="level-length-label" class="program-count">8000 px</span>
-              </div>
-
-              <div id="level-scroll" class="level-scroll" aria-label="Défilement horizontal du niveau">
-                <div id="level-grid" class="level-grid" aria-label="Grille horizontale du niveau">
-                  <div class="grid-ground"></div>
-                </div>
-              </div>
-
-              <div class="level-ruler">
-                <span>Début</span>
-                <span>Fin provisoire</span>
-              </div>
-            </section>
-
-            <aside class="panel side-panel level-side-panel" aria-label="Outils du niveau">
-              <section class="side-section level-palette-section">
-                <div class="section-title">
-                  <h2>Palette</h2>
-                </div>
-                <div class="level-tool-palette" aria-label="Palette level design">
-                  <button class="tool-button is-active" type="button" data-tool="triangle">
-                    <span class="tool-swatch" data-type="triangle"></span>
-                    <span>Pic</span>
-                    <small>Game Over</small>
-                  </button>
-                  <button class="tool-button" type="button" data-tool="block">
-                    <span class="tool-swatch" data-type="block"></span>
-                    <span>Bloc danger</span>
-                    <small>côté gauche</small>
-                  </button>
-                  <button class="tool-button" type="button" data-tool="platform">
-                    <span class="tool-swatch" data-type="platform"></span>
-                    <span>Plateforme</span>
-                    <small>solide</small>
-                  </button>
-                  <button class="tool-button" type="button" data-tool="solidBlock">
-                    <span class="tool-swatch" data-type="solidBlock"></span>
-                    <span>Bloc solide</span>
-                    <small>pas Game Over</small>
-                  </button>
-                  <button class="tool-button" type="button" data-tool="finish">
-                    <span class="tool-swatch" data-type="finish"></span>
-                    <span>Arrivée</span>
-                    <small>victoire</small>
-                  </button>
-                  <button class="tool-button" type="button" data-tool="eraser">
-                    <span class="tool-swatch" data-type="eraser"></span>
-                    <span>Gomme</span>
-                    <small>supprimer</small>
-                  </button>
-                </div>
-                <div id="block-color-panel" class="block-color-panel" aria-label="Couleurs des blocs"></div>
-              </section>
-
-              <section class="side-section">
-                <div class="section-title">
-                  <h2>Paramètres</h2>
-                </div>
-                <div class="settings-grid">
-                  <label>
-                    Vitesse
-                    <input id="speed-input" type="number" min="120" max="520" step="10" value="280">
-                  </label>
-                  <label>
-                    Gravité
-                    <input id="gravity-input" type="number" min="600" max="2400" step="50" value="1350">
-                  </label>
-                  <label>
-                    Force de saut
-                    <input id="jump-input" type="number" min="260" max="900" step="10" value="560">
-                  </label>
-                  <label>
-                    Couleur du fond
-                    <input id="background-color-input" type="color" value="#121722">
-                  </label>
-                </div>
-              </section>
-
-              <section class="side-section">
-                <div class="section-title">
-                  <h2>Sélection</h2>
-                </div>
-                <div class="selection-panel">
-                  <span id="selected-obstacle-info">Aucun élément sélectionné</span>
-                  <button id="delete-obstacle-button" class="danger-button" type="button" disabled>Supprimer</button>
-                  <button id="clear-level-button" class="secondary-button" type="button">Tout effacer</button>
-                </div>
-              </section>
-
-              <section class="side-section">
-                <div class="section-title">
-                  <h2>Utilisation</h2>
-                </div>
-                <ul class="rule-list">
-                  <li>Clique sur la grille pour poser l'outil choisi.</li>
-                  <li>La gomme supprime seulement l'élément touché.</li>
-                  <li>La zone se prolonge quand tu construis vers la droite.</li>
-                </ul>
-              </section>
-            </aside>
-          </div>
-        </section>
+        <section id="community-level-list" class="community-level-list" aria-live="polite"></section>
       </main>
+    </section>
+
+    <div class="app-shell">
+      <header class="topbar">
+        <button id="brand-home-button" class="brand brand-button" type="button" aria-label="Back to community home">
+          <span class="brand-mark" aria-hidden="true">
+            <span class="brand-diamond"></span>
+          </span>
+          <div class="brand-copy">
+            <h1>Dash Maker</h1>
+            <p>Level workshop</p>
+          </div>
+        </button>
+
+        <nav class="mode-nav" aria-label="Maker steps">
+          <button class="mode-button is-active" id="create-mode-button" type="button" data-mode="create">
+            <span class="mode-icon mode-icon-create" aria-hidden="true"></span>
+            Create
+          </button>
+          <button class="mode-button" id="test-button" type="button" data-mode="test">
+            <span class="mode-icon mode-icon-test" aria-hidden="true"></span>
+            Test
+          </button>
+          <button class="mode-button" id="validate-mode-button" type="button" data-mode="validation">
+            <span class="mode-icon mode-icon-validation" aria-hidden="true"></span>
+            Validate
+          </button>
+        </nav>
+
+        <section id="community-game-menu" class="community-game-menu" hidden aria-label="Community level details">
+          <div class="community-game-title">
+            <span>Community level</span>
+            <strong id="community-game-name">Level</strong>
+          </div>
+          <div class="community-game-stats" aria-label="Level statistics">
+            <span><strong id="community-game-plays">0</strong> plays</span>
+            <span><strong id="community-game-deaths">0</strong> deaths</span>
+            <span><strong id="community-game-successes">0</strong> clears</span>
+            <span id="community-game-rating">No rating</span>
+          </div>
+          <div class="community-game-actions">
+            <button id="community-restart-button" class="primary-action" type="button">Restart</button>
+            <button id="community-home-button" class="secondary-action" type="button">Community</button>
+            <button id="community-editor-button" class="outline-action" type="button">Editor</button>
+          </div>
+        </section>
+
+        <div class="top-actions" aria-label="Project actions">
+          <button id="home-button" class="outline-action" type="button">Home</button>
+          <button id="open-properties-button" class="outline-action" type="button">Properties</button>
+          <button id="save-project-button" class="outline-action" type="button">Save</button>
+          <label id="load-level-button" class="outline-action load-level-button" for="level-file-input" role="button" tabindex="0">Load</label>
+        </div>
+      </header>
+
+      <main class="maker-layout">
+        <aside class="panel palette-panel" aria-label="Palette and tools">
+          <section class="panel-section">
+            <button class="section-toggle" type="button" data-panel-toggle="palette-content" aria-expanded="true">
+              <span>Palette</span>
+              <span class="chevron-icon" aria-hidden="true"></span>
+            </button>
+            <div id="palette-content" class="collapsible-content">
+              <div class="palette-tabs" role="tablist" aria-label="Palette categories">
+                <button class="palette-tab is-active" id="gameplay-palette-tab" type="button" data-palette-tab="gameplay" role="tab" aria-selected="true">Gameplay</button>
+                <button class="palette-tab" id="decor-palette-tab" type="button" data-palette-tab="decor" role="tab" aria-selected="false">Decor</button>
+              </div>
+
+              <div id="gameplay-palette-panel" class="palette-tab-panel is-active" role="tabpanel" aria-labelledby="gameplay-palette-tab">
+                <div id="gameplay-palette" class="palette-grid level-tool-palette" aria-label="Gameplay object palette">
+                  <button class="palette-card tool-button is-active" type="button" data-tool="solidBlock">
+                    <span class="palette-preview tool-swatch" data-type="solidBlock"></span>
+                    <strong>Block</strong>
+                    <small>safe</small>
+                  </button>
+                  <button class="palette-card tool-button" type="button" data-tool="dirtBlock">
+                    <span class="palette-preview tool-swatch" data-type="dirtBlock"></span>
+                    <strong>Dirt</strong>
+                    <small>solid</small>
+                  </button>
+                  <button class="palette-card tool-button" type="button" data-tool="iceBlock">
+                    <span class="palette-preview tool-swatch" data-type="iceBlock"></span>
+                    <strong>Ice</strong>
+                    <small>solid</small>
+                  </button>
+                  <button class="palette-card tool-button" type="button" data-tool="grassBlock">
+                    <span class="palette-preview tool-swatch" data-type="grassBlock"></span>
+                    <strong>Grass</strong>
+                    <small>solid</small>
+                  </button>
+                  <button class="palette-card tool-button" type="button" data-tool="platform">
+                    <span class="palette-preview tool-swatch" data-type="platform"></span>
+                    <strong>Platform</strong>
+                    <small>2 tiles</small>
+                  </button>
+                  <button class="palette-card tool-button" type="button" data-tool="triangle">
+                    <span class="palette-preview tool-swatch" data-type="triangle"></span>
+                    <strong>Spike</strong>
+                    <small>danger</small>
+                  </button>
+                  <button class="palette-card tool-button" type="button" data-tool="finish">
+                    <span class="palette-preview tool-swatch" data-type="finish"></span>
+                    <strong>Finish</strong>
+                    <small>goal</small>
+                  </button>
+                </div>
+                <div id="block-color-panel" class="block-color-panel" aria-label="Object colors"></div>
+              </div>
+
+              <div id="decor-palette-panel" class="palette-tab-panel" role="tabpanel" aria-labelledby="decor-palette-tab" hidden>
+                <div id="decor-palette" class="palette-grid decor-tool-palette" aria-label="Decor palette"></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel-section tools-section">
+            <button class="section-toggle" type="button" data-panel-toggle="tools-content" aria-expanded="true">
+              <span>Tools</span>
+              <span class="chevron-icon" aria-hidden="true"></span>
+            </button>
+            <div id="tools-content" class="tool-grid collapsible-content" aria-label="Editing tools">
+              <button class="edit-tool tool-button" type="button" data-tool="eraser">
+                <span class="edit-tool-icon edit-tool-icon-eraser" aria-hidden="true"></span>
+                <strong>Eraser</strong>
+              </button>
+              <button class="edit-tool tool-button" type="button" data-tool="move">
+                <span class="edit-tool-icon edit-tool-icon-move" aria-hidden="true"></span>
+                <strong>Move</strong>
+              </button>
+            </div>
+          </section>
+
+          <div class="panel-footer-action">
+            <button id="open-clear-level-button" class="danger-panel-action" type="button">Clear level</button>
+          </div>
+        </aside>
+
+        <section class="center-column" aria-label="Main workspace">
+          <section id="editor-view" class="panel editor-panel view-pane is-active" data-view="create">
+            <div class="panel-heading editor-heading" hidden aria-hidden="true">
+              <div>
+                <h2>Editing zone</h2>
+                <p id="workspace-state">Autosaved locally</p>
+              </div>
+              <span id="level-length-label" class="metric-pill">250 columns</span>
+            </div>
+
+            <div class="editor-toolbar" hidden aria-hidden="true">
+              <button id="toolbar-play-button" class="toolbar-button play-toolbar" type="button">Play</button>
+              <button class="toolbar-button" id="toolbar-pause-button" type="button">Pause</button>
+              <button class="toolbar-button" id="toolbar-stop-button" type="button">Stop</button>
+              <button class="toolbar-button" id="toolbar-reset-view-button" type="button">Reset view</button>
+              <div class="toolbar-spacer"></div>
+              <label class="inline-control">
+                Tile
+                <select id="grid-size-select">
+                  <option value="32" selected>32 px</option>
+                </select>
+              </label>
+              <span id="tile-coordinate-label" class="tile-coordinate-label">Col 0 / Row 0</span>
+              <span class="zoom-control" aria-label="Zoom">
+                <button id="zoom-out-button" type="button">-</button>
+                <strong id="zoom-label">100%</strong>
+                <button id="zoom-in-button" type="button">+</button>
+              </span>
+            </div>
+
+            <div class="level-scroll-frame" aria-label="Game camera preview">
+              <div id="level-scroll" class="level-scroll" aria-label="Horizontal level editor">
+                <div id="level-grid" class="level-grid" aria-label="Level grid">
+                  <div class="grid-background"></div>
+                  <div class="grid-ground"></div>
+                  <div class="editor-start-marker" aria-hidden="true"></div>
+                  <div class="editor-player-preview" aria-hidden="true"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="editor-ruler" aria-hidden="true">
+              <span>0</span>
+              <span>25</span>
+              <span>50</span>
+              <span>75</span>
+              <span>100</span>
+              <span>125</span>
+            </div>
+          </section>
+
+          <section id="game-view" class="panel game-panel view-pane" data-view="test">
+            <button id="exit-game-button" class="game-exit-button" type="button" aria-label="Back to editor">
+              <span class="back-icon" aria-hidden="true"></span>
+            </button>
+            <div class="panel-heading">
+              <div>
+                <h2 id="game-title">Level test</h2>
+                <p id="loaded-level-label">Current level</p>
+              </div>
+              <div class="game-actions">
+                <button id="play-button" class="primary-action" type="button">Play</button>
+                <button id="stop-button" class="secondary-action" type="button">Stop</button>
+                <button id="reset-button" class="secondary-action" type="button">Restart</button>
+                <button id="stats-button" class="secondary-action" type="button">Stats</button>
+              </div>
+            </div>
+            <div id="validation-run-panel" class="validation-run-panel" hidden aria-live="polite">
+              <div class="validation-run-copy">
+                <strong>Validate level</strong>
+                <span id="validation-run-message">Reach the finish line to unlock sharing.</span>
+              </div>
+              <div class="validation-run-status">
+                <span id="validation-run-state">Clear check required</span>
+                <span id="validation-run-goal">Goal: reach the finish</span>
+                <span id="validation-run-distance">Distance 0</span>
+              </div>
+              <div class="validation-run-actions">
+                <button id="retry-validation-button" class="warning-action" type="button">Retry</button>
+                <button id="share-validation-run-button" class="publish-action" type="button" hidden>Publish</button>
+              </div>
+            </div>
+            <div class="game-frame">
+              <div id="game-container"></div>
+              <div id="game-message" class="game-message">Ready</div>
+              <div id="validation-success-overlay" class="validation-success-overlay" hidden aria-live="assertive">
+                <div class="validation-success-card">
+                  <strong>Level validated</strong>
+                  <span>Publish is now unlocked</span>
+                </div>
+              </div>
+            </div>
+            <div class="game-footer">
+              <span>Press Space to jump. Restart with Space, Enter or R.</span>
+            </div>
+          </section>
+        </section>
+
+      </main>
+
+      <footer class="status-bar" hidden aria-hidden="true">
+        <span id="level-name-label">Level: My level 1</span>
+        <span id="program-status">Internal game rules enabled</span>
+      </footer>
     </div>
 
-    <input id="level-file-input" class="visually-hidden" type="file" accept=".json,application/json">
-
-    <div id="validation-modal" class="validation-modal" hidden role="dialog" aria-labelledby="validation-title">
-      <section class="validation-card" aria-live="polite">
-        <div class="validation-heading">
-          <div>
-            <h2 id="validation-title">Validation du niveau</h2>
-            <p id="validation-message">Atteins l'arrivée pour débloquer le téléchargement.</p>
-          </div>
-          <button id="close-validation-button" class="icon-close" type="button" aria-label="Fermer la validation">×</button>
-        </div>
-        <div class="validation-state">
-          <span id="validation-state-label">En attente</span>
-          <span id="validation-distance-label">Distance 0</span>
-        </div>
-        <div class="validation-actions">
-          <button id="start-validation-button" class="test-action" type="button">Relancer</button>
-          <button id="download-level-button" type="button" disabled>Télécharger le niveau</button>
+    <div id="validation-success-screen" class="validation-success-screen" hidden role="dialog" aria-modal="true" aria-labelledby="validation-success-title" aria-live="assertive">
+      <section class="validation-success-screen-card">
+        <strong id="validation-success-title">Level validated</strong>
+        <span>Do you want to publish it to the community?</span>
+        <div class="validation-success-actions">
+          <button id="share-validated-level-button" class="publish-action" type="button">Publish now</button>
+          <button id="close-validation-success-button" class="secondary-action" type="button">Back to editor</button>
         </div>
       </section>
     </div>
+
+    <div id="community-clear-modal" class="maker-modal community-clear-modal" hidden role="dialog" aria-modal="true" aria-labelledby="community-clear-title">
+      <section class="modal-card community-clear-card">
+        <div class="community-clear-badge" aria-hidden="true">Victory</div>
+        <div class="modal-heading community-clear-heading">
+          <div>
+            <h2 id="community-clear-title">Game cleared</h2>
+            <p id="community-clear-summary">You finished this community game.</p>
+          </div>
+          <button id="close-community-clear-button" class="modal-close-button" type="button" aria-label="Close victory summary">
+            <span class="close-icon" aria-hidden="true"></span>
+          </button>
+        </div>
+        <section class="community-clear-result" aria-label="Clear result">
+          <span>Cleared in</span>
+          <strong id="community-clear-attempts">1 attempt</strong>
+        </section>
+        <section class="community-clear-rating-panel" aria-label="Rate this creator">
+          <div>
+            <strong>Rate the creator's game</strong>
+            <span id="community-clear-rating-status">Choose a rating from 1 to 5 stars.</span>
+          </div>
+          <div id="community-clear-rating-stars" class="community-clear-rating-stars" aria-label="Rating stars"></div>
+        </section>
+        <div class="community-clear-actions">
+          <button id="community-clear-retry-button" class="primary-action" type="button">Restart</button>
+          <button id="community-clear-home-button" class="secondary-action" type="button">Community</button>
+        </div>
+      </section>
+    </div>
+
+    <div id="publish-modal" class="maker-modal" hidden role="dialog" aria-modal="true" aria-labelledby="publish-title">
+      <section class="modal-card publish-modal-card">
+        <div class="modal-heading">
+          <div>
+            <h2 id="publish-title">Publish level</h2>
+            <p>Name the validated level before sending it to the community page.</p>
+          </div>
+          <button id="close-publish-modal-button" class="modal-close-button" type="button" aria-label="Close publish">
+            <span class="close-icon" aria-hidden="true"></span>
+          </button>
+        </div>
+        <div class="properties-form">
+          <label>
+            Level name
+            <input id="publish-level-name-input" type="text" maxlength="80" value="My level 1">
+          </label>
+          <p id="publish-status" class="publish-status">Only the last validated version will be published.</p>
+          <div class="modal-actions">
+            <button id="cancel-publish-button" class="secondary-action" type="button">Cancel</button>
+            <button id="confirm-publish-button" class="publish-action" type="button">Publish</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div id="properties-modal" class="maker-modal" hidden role="dialog" aria-modal="true" aria-labelledby="properties-title">
+      <section class="modal-card properties-modal-card">
+        <div class="modal-heading">
+          <div>
+            <h2 id="properties-title">Properties</h2>
+            <p>Adjust level settings without covering the editor permanently.</p>
+          </div>
+          <button id="close-properties-button" class="modal-close-button" type="button" aria-label="Close properties">
+            <span class="close-icon" aria-hidden="true"></span>
+          </button>
+        </div>
+        <div id="properties-content" class="properties-form">
+          <label>
+            Level name
+            <input id="level-name-input" type="text" maxlength="48" value="My level 1">
+          </label>
+          <label>
+            Speed
+            <span class="range-row">
+              <input id="speed-input" type="range" min="120" max="520" step="10" value="280">
+              <output id="speed-output">1.00x</output>
+            </span>
+          </label>
+          <label>
+            Gravity
+            <span class="range-row">
+              <input id="gravity-input" type="range" min="600" max="2400" step="50" value="1350">
+              <output id="gravity-output">1.00x</output>
+            </span>
+          </label>
+          <label>
+            Jump force
+            <span class="range-row">
+              <input id="jump-input" type="range" min="260" max="900" step="10" value="560">
+              <output id="jump-output">1.00x</output>
+            </span>
+          </label>
+          <label>
+            Theme
+            <select id="theme-select">
+              <option value="#071322">Neon</option>
+              <option value="#121722">Classic grid</option>
+              <option value="#1a1726">Violet night</option>
+              <option value="#102018">Emerald lab</option>
+              <option value="#211711">Copper cave</option>
+              <option value="#111827">Arcade dark</option>
+            </select>
+          </label>
+          <label>
+            Background color
+            <input id="background-color-input" type="color" value="#071322">
+          </label>
+        </div>
+      </section>
+    </div>
+
+    <div id="validation-modal" class="maker-modal" hidden role="dialog" aria-modal="true" aria-labelledby="validation-title">
+      <section class="modal-card validation-modal-card">
+        <div class="modal-heading">
+          <div>
+            <h2 id="validation-title">Validate level</h2>
+            <p>Publish only after completing a clear check.</p>
+          </div>
+          <button id="close-validation-modal-button" class="modal-close-button" type="button" aria-label="Close validation">
+            <span class="close-icon" aria-hidden="true"></span>
+          </button>
+        </div>
+        <div id="validation-content" class="validation-content">
+          <div class="validation-box" id="validation-box" data-state="idle">
+            <p id="validation-message">Finish the level once before publishing.</p>
+            <div class="validation-details">
+              <span id="validation-state-label">Clear check required</span>
+              <span id="validation-distance-label">Distance 0</span>
+            </div>
+            <button id="start-validation-button" class="warning-action" type="button">Run clear check</button>
+          </div>
+          <button id="validate-level-button" class="primary-action full-width-action" type="button">Validate level</button>
+        </div>
+      </section>
+    </div>
+
+    <div id="selection-modal" class="maker-modal" hidden role="dialog" aria-modal="true" aria-labelledby="selection-title">
+      <section class="modal-card selection-modal-card">
+        <div class="modal-heading">
+          <div>
+            <h2 id="selection-title">Selection</h2>
+            <p>Manage the currently selected object.</p>
+          </div>
+          <button id="close-selection-button" class="modal-close-button" type="button" aria-label="Close selection">
+            <span class="close-icon" aria-hidden="true"></span>
+          </button>
+        </div>
+        <div id="selection-content" class="selection-body">
+          <span id="selected-obstacle-info">No object selected</span>
+          <button id="delete-obstacle-button" class="danger-action" type="button" disabled>Delete selected</button>
+          <button id="clear-level-button" class="secondary-action" type="button">Clear level</button>
+          <button id="reset-project-button" class="secondary-action" type="button">Reset project</button>
+        </div>
+      </section>
+    </div>
+
+    <div id="clear-level-modal" class="maker-modal" hidden role="dialog" aria-modal="true" aria-labelledby="clear-level-title">
+      <section class="modal-card clear-level-modal-card" data-clear-step="1">
+        <div class="modal-heading">
+          <div>
+            <h2 id="clear-level-title">Clear level</h2>
+            <p id="clear-level-subtitle">This will remove every object in the level.</p>
+          </div>
+          <button id="close-clear-level-button" class="modal-close-button" type="button" aria-label="Close clear level confirmation">
+            <span class="close-icon" aria-hidden="true"></span>
+          </button>
+        </div>
+        <div class="clear-level-warning">
+          <strong id="clear-level-step-label">Confirmation 1 / 2</strong>
+          <p id="clear-level-message">Your level layout will be emptied. The project settings and level name will stay.</p>
+        </div>
+        <div class="modal-actions">
+          <button id="cancel-clear-level-button" class="secondary-action" type="button">Cancel</button>
+          <button id="advance-clear-level-button" class="warning-action" type="button">Continue</button>
+          <button id="confirm-clear-level-button" class="danger-action" type="button" hidden>Clear level permanently</button>
+        </div>
+      </section>
+    </div>
+
+    <div id="stats-modal" class="stats-modal" hidden role="dialog" aria-modal="true" aria-labelledby="stats-title">
+      <section class="stats-card">
+        <div class="stats-heading">
+          <div>
+            <h2 id="stats-title">Run statistics</h2>
+            <p>Live values from the current test.</p>
+          </div>
+          <button id="close-stats-button" class="modal-close-button" type="button" aria-label="Close statistics">
+            <span class="close-icon" aria-hidden="true"></span>
+          </button>
+        </div>
+        <div class="stats-grid">
+          <article class="stat-tile">
+            <span>Status</span>
+            <strong id="game-state-label">Ready</strong>
+          </article>
+          <article class="stat-tile">
+            <span>Distance</span>
+            <strong id="distance-value">0</strong>
+          </article>
+          <article class="stat-tile">
+            <span>Score</span>
+            <strong id="score-value">0</strong>
+          </article>
+          <article class="stat-tile">
+            <span>Speed</span>
+            <strong id="stats-speed-value">1.00x</strong>
+          </article>
+          <article class="stat-tile">
+            <span>Gravity</span>
+            <strong id="stats-gravity-value">1.00x</strong>
+          </article>
+          <article class="stat-tile">
+            <span>Jump force</span>
+            <strong id="stats-jump-value">1.00x</strong>
+          </article>
+          <article class="stat-tile">
+            <span>Gameplay objects</span>
+            <strong id="stats-objects-value">0</strong>
+          </article>
+        </div>
+      </section>
+    </div>
+
+    <input id="level-file-input" class="visually-hidden" type="file" accept=".json,application/json">
   </body>
 </html>

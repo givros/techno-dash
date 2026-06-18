@@ -42,7 +42,7 @@
 
     static findSolidBlockSideCollision(playerBounds, screenObjects) {
       return screenObjects
-        .filter((object) => object.type === "solidBlock")
+        .filter((object) => CollisionManager.isSolidBlock(object))
         .filter((object) => CollisionManager.rectsOverlap(playerBounds, object))
         .filter((object) => playerBounds.bottom > object.top + 8)
         .filter((object) => playerBounds.left < object.left && playerBounds.right > object.left)
@@ -50,7 +50,11 @@
     }
 
     static isSafeLandingSurface(object) {
-      return object.type === "platform" || object.type === "solidBlock";
+      return object.type === "platform" || CollisionManager.isSolidBlock(object);
+    }
+
+    static isSolidBlock(object) {
+      return window.TechnoDash.Level.isSolidBlockType(object.type);
     }
 
     static isLandingSurface(object) {
