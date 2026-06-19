@@ -80,11 +80,18 @@
     }
 
     groupDecorationsByTheme(decorations) {
-      const themeOrder = ["city", "winter", "forest"];
+      const themeOrder = ["city", "winter", "forest", "desert", "space", "candy", "ocean", "castle", "industrial", "volcano"];
       const themeLabels = {
         city: "City",
         winter: "Winter",
         forest: "Forest",
+        desert: "Desert",
+        space: "Space",
+        candy: "Candy",
+        ocean: "Ocean",
+        castle: "Castle",
+        industrial: "Industrial",
+        volcano: "Volcano",
         other: "Other"
       };
       const groups = new Map(themeOrder.map((theme) => [theme, []]));

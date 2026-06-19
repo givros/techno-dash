@@ -1,246 +1,138 @@
 (() => {
   window.TechnoDash = window.TechnoDash || {};
 
-  window.TechnoDash.DecorCatalog = [
-    {
-      type: "tree",
-      label: "Tree",
-      file: "tree-4x4.png",
-      width: 128,
-      height: 128,
-      theme: "forest"
-    },
-    {
-      type: "city-apartment-tower",
-      label: "City apartment",
-      file: "city-apartment-tower.png",
-      width: 192,
-      height: 192,
-      theme: "city"
-    },
-    {
-      type: "city-shopfront",
-      label: "City shopfront",
-      file: "city-shopfront.png",
-      width: 160,
-      height: 160,
-      theme: "city"
-    },
-    {
-      type: "city-metro-entrance",
-      label: "Metro entrance",
-      file: "city-metro-entrance.png",
-      width: 128,
-      height: 128,
-      theme: "city"
-    },
-    {
-      type: "city-bus-stop",
-      label: "Bus stop",
-      file: "city-bus-stop.png",
-      width: 128,
-      height: 128,
-      theme: "city"
-    },
-    {
-      type: "city-streetlamp",
-      label: "Streetlamp",
-      file: "city-streetlamp.png",
-      width: 96,
-      height: 96,
-      theme: "city"
-    },
-    {
-      type: "city-billboard-frame",
-      label: "Billboard",
-      file: "city-billboard-frame.png",
-      width: 160,
-      height: 160,
-      theme: "city"
-    },
-    {
-      type: "city-water-tower",
-      label: "Water tower",
-      file: "city-water-tower.png",
-      width: 160,
-      height: 160,
-      theme: "city"
-    },
-    {
-      type: "city-factory-stack",
-      label: "Factory",
-      file: "city-factory-stack.png",
-      width: 192,
-      height: 192,
-      theme: "city"
-    },
-    {
-      type: "city-phone-booth",
-      label: "Phone booth",
-      file: "city-phone-booth.png",
-      width: 96,
-      height: 96,
-      theme: "city"
-    },
-    {
-      type: "city-park-planter",
-      label: "City planter",
-      file: "city-park-planter.png",
-      width: 96,
-      height: 96,
-      theme: "city"
-    },
-    {
-      type: "winter-cabin",
-      label: "Winter cabin",
-      file: "winter-cabin.png",
-      width: 160,
-      height: 160,
-      theme: "winter"
-    },
-    {
-      type: "winter-snow-pine",
-      label: "Snow pine",
-      file: "winter-snow-pine.png",
-      width: 128,
-      height: 128,
-      theme: "winter"
-    },
-    {
-      type: "winter-igloo",
-      label: "Igloo",
-      file: "winter-igloo.png",
-      width: 128,
-      height: 128,
-      theme: "winter"
-    },
-    {
-      type: "winter-snowman",
-      label: "Snowman",
-      file: "winter-snowman.png",
-      width: 96,
-      height: 96,
-      theme: "winter"
-    },
-    {
-      type: "winter-frozen-lamp",
-      label: "Frozen lamp",
-      file: "winter-frozen-lamp.png",
-      width: 96,
-      height: 96,
-      theme: "winter"
-    },
-    {
-      type: "winter-ice-crystals",
-      label: "Ice crystals",
-      file: "winter-ice-crystals.png",
-      width: 96,
-      height: 96,
-      theme: "winter"
-    },
-    {
-      type: "winter-ski-lodge",
-      label: "Ski lodge",
-      file: "winter-ski-lodge.png",
-      width: 192,
-      height: 192,
-      theme: "winter"
-    },
-    {
-      type: "winter-snowy-boulder",
-      label: "Snowy boulder",
-      file: "winter-snowy-boulder.png",
-      width: 96,
-      height: 96,
-      theme: "winter"
-    },
-    {
-      type: "winter-frozen-fountain",
-      label: "Frozen fountain",
-      file: "winter-frozen-fountain.png",
-      width: 128,
-      height: 128,
-      theme: "winter"
-    },
-    {
-      type: "winter-ice-arch",
-      label: "Ice arch",
-      file: "winter-ice-arch.png",
-      width: 160,
-      height: 160,
-      theme: "winter"
-    },
-    {
-      type: "forest-oak-large",
-      label: "Large oak",
-      file: "forest-oak-large.png",
-      width: 160,
-      height: 160,
-      theme: "forest"
-    },
-    {
-      type: "forest-pine-large",
-      label: "Forest pine",
-      file: "forest-pine-large.png",
-      width: 128,
-      height: 128,
-      theme: "forest"
-    },
-    {
-      type: "forest-mushroom-cluster",
-      label: "Mushrooms",
-      file: "forest-mushroom-cluster.png",
-      width: 96,
-      height: 96,
-      theme: "forest"
-    },
-    {
-      type: "forest-stump",
-      label: "Tree stump",
-      file: "forest-stump.png",
-      width: 96,
-      height: 96,
-      theme: "forest"
-    },
-    {
-      type: "forest-fallen-log",
-      label: "Fallen log",
-      file: "forest-fallen-log.png",
-      width: 128,
-      height: 128,
-      theme: "forest"
-    },
-    {
-      type: "forest-bush",
-      label: "Forest bush",
-      file: "forest-bush.png",
-      width: 96,
-      height: 96,
-      theme: "forest"
-    },
-    {
-      type: "forest-wooden-hut",
-      label: "Wooden hut",
-      file: "forest-wooden-hut.png",
-      width: 160,
-      height: 160,
-      theme: "forest"
-    },
-    {
-      type: "forest-stone-ruin",
-      label: "Stone ruin",
-      file: "forest-stone-ruin.png",
-      width: 128,
-      height: 128,
-      theme: "forest"
-    },
-    {
-      type: "forest-fern-cluster",
-      label: "Ferns",
-      file: "forest-fern-cluster.png",
-      width: 96,
-      height: 96,
-      theme: "forest"
-    }
-  ];
+  const tile = 32;
+  const decorGroups = {
+    city: [
+      ['city-apartment-tower', 'City apartment', 'city-apartment-tower.png', 6, 6],
+      ['city-shopfront', 'City shopfront', 'city-shopfront.png', 5, 5],
+      ['city-metro-entrance', 'Metro entrance', 'city-metro-entrance.png', 4, 4],
+      ['city-bus-stop', 'Bus stop', 'city-bus-stop.png', 4, 4],
+      ['city-streetlamp', 'Streetlamp', 'city-streetlamp.png', 3, 3],
+      ['city-billboard-frame', 'Billboard', 'city-billboard-frame.png', 5, 5],
+      ['city-water-tower', 'Water tower', 'city-water-tower.png', 5, 5],
+      ['city-factory-stack', 'Factory', 'city-factory-stack.png', 6, 6],
+      ['city-phone-booth', 'Phone booth', 'city-phone-booth.png', 3, 3],
+      ['city-park-planter', 'City planter', 'city-park-planter.png', 3, 3],
+    ],
+    winter: [
+      ['winter-cabin', 'Winter cabin', 'winter-cabin.png', 5, 5],
+      ['winter-snow-pine', 'Snow pine', 'winter-snow-pine.png', 4, 4],
+      ['winter-igloo', 'Igloo', 'winter-igloo.png', 4, 4],
+      ['winter-snowman', 'Snowman', 'winter-snowman.png', 3, 3],
+      ['winter-frozen-lamp', 'Frozen lamp', 'winter-frozen-lamp.png', 3, 3],
+      ['winter-ice-crystals', 'Ice crystals', 'winter-ice-crystals.png', 3, 3],
+      ['winter-ski-lodge', 'Ski lodge', 'winter-ski-lodge.png', 6, 6],
+      ['winter-snowy-boulder', 'Snowy boulder', 'winter-snowy-boulder.png', 3, 3],
+      ['winter-frozen-fountain', 'Frozen fountain', 'winter-frozen-fountain.png', 4, 4],
+      ['winter-ice-arch', 'Ice arch', 'winter-ice-arch.png', 5, 5],
+    ],
+    forest: [
+      ['tree', 'Tree', 'tree-4x4.png', 4, 4],
+      ['forest-oak-large', 'Large oak', 'forest-oak-large.png', 5, 5],
+      ['forest-pine-large', 'Forest pine', 'forest-pine-large.png', 4, 4],
+      ['forest-mushroom-cluster', 'Mushrooms', 'forest-mushroom-cluster.png', 3, 3],
+      ['forest-stump', 'Tree stump', 'forest-stump.png', 3, 3],
+      ['forest-fallen-log', 'Fallen log', 'forest-fallen-log.png', 4, 4],
+      ['forest-bush', 'Forest bush', 'forest-bush.png', 3, 3],
+      ['forest-wooden-hut', 'Wooden hut', 'forest-wooden-hut.png', 5, 5],
+      ['forest-stone-ruin', 'Stone ruin', 'forest-stone-ruin.png', 4, 4],
+      ['forest-fern-cluster', 'Ferns', 'forest-fern-cluster.png', 3, 3],
+    ],
+    desert: [
+      ['desert-cactus-cluster', 'Cactus cluster', 'desert-cactus-cluster.png', 4, 4],
+      ['desert-mesa-arch', 'Mesa arch', 'desert-mesa-arch.png', 5, 5],
+      ['desert-adobe-hut', 'Adobe hut', 'desert-adobe-hut.png', 5, 5],
+      ['desert-oasis-palm', 'Oasis palm', 'desert-oasis-palm.png', 4, 4],
+      ['desert-skull-rock', 'Skull rock', 'desert-skull-rock.png', 3, 3],
+      ['desert-trail-sign', 'Trail sign', 'desert-trail-sign.png', 3, 3],
+      ['desert-nomad-tent', 'Nomad tent', 'desert-nomad-tent.png', 4, 4],
+      ['desert-obelisk', 'Obelisk', 'desert-obelisk.png', 5, 5],
+      ['desert-dune-rocks', 'Dune rocks', 'desert-dune-rocks.png', 4, 4],
+      ['desert-stone-well', 'Stone well', 'desert-stone-well.png', 4, 4],
+    ],
+    space: [
+      ['space-moon-rocks', 'Moon rocks', 'space-moon-rocks.png', 3, 3],
+      ['space-satellite-dish', 'Satellite dish', 'space-satellite-dish.png', 4, 4],
+      ['space-rocket-monument', 'Rocket monument', 'space-rocket-monument.png', 5, 5],
+      ['space-alien-plant', 'Alien plant', 'space-alien-plant.png', 3, 3],
+      ['space-cargo-crates', 'Cargo crates', 'space-cargo-crates.png', 4, 4],
+      ['space-beacon-tower', 'Beacon tower', 'space-beacon-tower.png', 5, 5],
+      ['space-observatory-dome', 'Observatory dome', 'space-observatory-dome.png', 5, 5],
+      ['space-portal-ring', 'Portal ring', 'space-portal-ring.png', 5, 5],
+      ['space-solar-array', 'Solar array', 'space-solar-array.png', 4, 4],
+      ['space-lunar-rover', 'Lunar rover', 'space-lunar-rover.png', 4, 4],
+    ],
+    candy: [
+      ['candy-cupcake-cottage', 'Cupcake cottage', 'candy-cupcake-cottage.png', 5, 5],
+      ['candy-lollipop-tree', 'Lollipop tree', 'candy-lollipop-tree.png', 4, 4],
+      ['candy-gumdrop-bush', 'Gumdrop bush', 'candy-gumdrop-bush.png', 3, 3],
+      ['candy-cane-arch', 'Candy cane arch', 'candy-cane-arch.png', 5, 5],
+      ['candy-chocolate-fountain', 'Chocolate fountain', 'candy-chocolate-fountain.png', 4, 4],
+      ['candy-macaron-stack', 'Macaron stack', 'candy-macaron-stack.png', 3, 3],
+      ['candy-frosting-mound', 'Frosting mound', 'candy-frosting-mound.png', 3, 3],
+      ['candy-jellybean-pile', 'Jellybean pile', 'candy-jellybean-pile.png', 3, 3],
+      ['candy-wafer-tower', 'Wafer tower', 'candy-wafer-tower.png', 4, 4],
+      ['candy-sprinkle-sign', 'Sprinkle sign', 'candy-sprinkle-sign.png', 3, 3],
+    ],
+    ocean: [
+      ['ocean-coral-reef', 'Coral reef', 'ocean-coral-reef.png', 4, 4],
+      ['ocean-seaweed-cluster', 'Seaweed', 'ocean-seaweed-cluster.png', 3, 3],
+      ['ocean-shell-arch', 'Shell arch', 'ocean-shell-arch.png', 5, 5],
+      ['ocean-rusty-anchor', 'Anchor', 'ocean-rusty-anchor.png', 3, 3],
+      ['ocean-shipwreck-mast', 'Shipwreck mast', 'ocean-shipwreck-mast.png', 5, 5],
+      ['ocean-treasure-chest', 'Treasure chest', 'ocean-treasure-chest.png', 3, 3],
+      ['ocean-red-buoy', 'Red buoy', 'ocean-red-buoy.png', 3, 3],
+      ['ocean-small-lighthouse', 'Lighthouse', 'ocean-small-lighthouse.png', 5, 5],
+      ['ocean-tidepool-rock', 'Tidepool rock', 'ocean-tidepool-rock.png', 3, 3],
+      ['ocean-palm-island', 'Palm island', 'ocean-palm-island.png', 4, 4],
+    ],
+    castle: [
+      ['castle-stone-tower', 'Stone tower', 'castle-stone-tower.png', 5, 5],
+      ['castle-gate', 'Castle gate', 'castle-gate.png', 5, 5],
+      ['castle-banner-pole', 'Banner pole', 'castle-banner-pole.png', 4, 4],
+      ['castle-iron-brazier', 'Iron brazier', 'castle-iron-brazier.png', 3, 3],
+      ['castle-knight-statue', 'Knight statue', 'castle-knight-statue.png', 4, 4],
+      ['castle-broken-wall', 'Broken wall', 'castle-broken-wall.png', 4, 4],
+      ['castle-window-ruin', 'Window ruin', 'castle-window-ruin.png', 4, 4],
+      ['castle-weapon-rack', 'Weapon rack', 'castle-weapon-rack.png', 3, 3],
+      ['castle-drawbridge-planks', 'Drawbridge', 'castle-drawbridge-planks.png', 4, 4],
+      ['castle-royal-fountain', 'Royal fountain', 'castle-royal-fountain.png', 4, 4],
+    ],
+    industrial: [
+      ['industrial-pipe-stack', 'Pipe stack', 'industrial-pipe-stack.png', 4, 4],
+      ['industrial-gear-machine', 'Gear machine', 'industrial-gear-machine.png', 4, 4],
+      ['industrial-factory-tank', 'Factory tank', 'industrial-factory-tank.png', 5, 5],
+      ['industrial-crane-hook', 'Crane hook', 'industrial-crane-hook.png', 4, 4],
+      ['industrial-warning-sign', 'Warning sign', 'industrial-warning-sign.png', 3, 3],
+      ['industrial-vent-fan', 'Vent fan', 'industrial-vent-fan.png', 3, 3],
+      ['industrial-cable-spool', 'Cable spool', 'industrial-cable-spool.png', 3, 3],
+      ['industrial-conveyor-module', 'Conveyor', 'industrial-conveyor-module.png', 4, 4],
+      ['industrial-barrel-cluster', 'Barrels', 'industrial-barrel-cluster.png', 3, 3],
+      ['industrial-power-generator', 'Generator', 'industrial-power-generator.png', 4, 4],
+    ],
+    volcano: [
+      ['volcano-vent', 'Volcano vent', 'volcano-vent.png', 4, 4],
+      ['volcano-basalt-pillars', 'Basalt pillars', 'volcano-basalt-pillars.png', 4, 4],
+      ['volcano-magma-crystal', 'Magma crystal', 'volcano-magma-crystal.png', 4, 4],
+      ['volcano-lava-geyser', 'Lava geyser', 'volcano-lava-geyser.png', 4, 4],
+      ['volcano-charred-tree', 'Charred tree', 'volcano-charred-tree.png', 4, 4],
+      ['volcano-obsidian-arch', 'Obsidian arch', 'volcano-obsidian-arch.png', 5, 5],
+      ['volcano-smoldering-boulder', 'Smoldering boulder', 'volcano-smoldering-boulder.png', 3, 3],
+      ['volcano-ash-shrine', 'Ash shrine', 'volcano-ash-shrine.png', 4, 4],
+      ['volcano-molten-cauldron', 'Molten cauldron', 'volcano-molten-cauldron.png', 3, 3],
+      ['volcano-fire-brazier', 'Fire brazier', 'volcano-fire-brazier.png', 3, 3],
+    ],
+  };
+
+  window.TechnoDash.DecorCatalog = Object.entries(decorGroups).flatMap(([theme, items]) =>
+    items.map(([type, label, file, widthTiles, heightTiles]) => ({
+      type,
+      label,
+      file,
+      width: widthTiles * tile,
+      height: heightTiles * tile,
+      theme
+    }))
+  );
 })();
