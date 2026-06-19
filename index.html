@@ -2,23 +2,23 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=1440, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Dash Maker</title>
     <link rel="icon" href="favicon.ico">
-    <link rel="stylesheet" href="styles/main.css?v=maker-20">
+    <link rel="stylesheet" href="styles/main.css?v=maker-23">
     <script defer src="vendor/phaser/phaser.min.js?v=maker-3"></script>
     <script defer src="src/game/DecorCatalog.js?v=maker-2"></script>
     <script defer src="src/game/Player.js?v=maker-3"></script>
     <script defer src="src/game/Level.js?v=maker-7"></script>
     <script defer src="src/game/CollisionManager.js?v=maker-4"></script>
-    <script defer src="src/game/GameScene.js?v=maker-13"></script>
+    <script defer src="src/game/GameScene.js?v=maker-14"></script>
     <script defer src="src/editor/LevelEditor.js?v=maker-10"></script>
     <script defer src="src/storage/SupabaseManager.js?v=maker-4"></script>
-    <script defer src="src/main.js?v=maker-29"></script>
+    <script defer src="src/main.js?v=maker-32"></script>
   </head>
   <body>
     <div class="desktop-warning">
-      Dash Maker is designed for a desktop computer.
+      Dash Maker works best on desktop. On mobile, rotate to landscape to play.
     </div>
 
     <section id="home-view" class="community-home" hidden aria-label="Community levels">
@@ -46,7 +46,38 @@
           </div>
         </section>
 
-        <section id="community-level-list" class="community-level-list" aria-live="polite"></section>
+        <section class="community-section community-spotlight" aria-labelledby="community-spotlight-title">
+          <div class="community-section-heading">
+            <div>
+              <span class="community-kicker">Top level right now</span>
+              <h2 id="community-spotlight-title">Top du moment</h2>
+            </div>
+          </div>
+          <div id="community-featured-list" class="community-featured-list" aria-live="polite"></div>
+        </section>
+
+        <section class="community-section community-browser" aria-labelledby="community-browser-title">
+          <div class="community-section-heading community-browser-heading">
+            <div>
+              <span class="community-kicker">Community catalogue</span>
+              <h2 id="community-browser-title">Other levels</h2>
+              <p id="community-sort-summary">Sorted by top moment</p>
+            </div>
+            <div class="community-filter-bar" role="tablist" aria-label="Level filters">
+              <button class="community-filter is-active" type="button" data-community-sort="moment" role="tab" aria-selected="true">Top moment</button>
+              <button class="community-filter" type="button" data-community-sort="mostPlayed" role="tab" aria-selected="false">Most played</button>
+              <button class="community-filter" type="button" data-community-sort="bestRated" role="tab" aria-selected="false">Best rated</button>
+              <button class="community-filter" type="button" data-community-sort="leastCleared" role="tab" aria-selected="false">Hardest</button>
+              <button class="community-filter" type="button" data-community-sort="mostDeaths" role="tab" aria-selected="false">Most deaths</button>
+              <button class="community-filter" type="button" data-community-sort="newest" role="tab" aria-selected="false">Newest</button>
+              <button class="community-filter" type="button" data-community-sort="mostCleared" role="tab" aria-selected="false">Most cleared</button>
+              <button class="community-filter" type="button" data-community-sort="highestClearRate" role="tab" aria-selected="false">Cleanest</button>
+              <button class="community-filter" type="button" data-community-sort="undiscovered" role="tab" aria-selected="false">Undiscovered</button>
+            </div>
+          </div>
+          <section id="community-level-list" class="community-level-list" aria-live="polite"></section>
+        </section>
+
       </main>
     </section>
 
@@ -275,6 +306,14 @@
                   <strong>Level validated</strong>
                   <span>Publish is now unlocked</span>
                 </div>
+              </div>
+              <div class="mobile-game-controls" aria-label="Mobile game controls">
+                <button id="mobile-restart-button" class="mobile-control-button mobile-restart-button" type="button" aria-label="Restart run">
+                  <span class="mobile-restart-icon" aria-hidden="true"></span>
+                </button>
+                <button id="mobile-jump-button" class="mobile-control-button mobile-jump-button" type="button" aria-label="Jump">
+                  <span class="mobile-jump-icon" aria-hidden="true"></span>
+                </button>
               </div>
             </div>
             <div class="game-footer">

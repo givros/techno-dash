@@ -271,6 +271,27 @@
       this.jumpQueued = false;
     }
 
+    queueJump() {
+      if (!this.created) {
+        return;
+      }
+
+      if (this.ended) {
+        this.restartQueued = true;
+        return;
+      }
+
+      this.jumpQueued = true;
+    }
+
+    queueRestart() {
+      if (!this.created) {
+        return;
+      }
+
+      this.restartQueued = true;
+    }
+
     getRuntimeSettings() {
       return this.level.getSettings();
     }

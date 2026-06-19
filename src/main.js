@@ -68,7 +68,10 @@
       openEditorButton: document.getElementById("open-editor-button"),
       refreshCommunityButton: document.getElementById("refresh-community-button"),
       communityStatus: document.getElementById("community-status"),
+      communityFeaturedList: document.getElementById("community-featured-list"),
       communityLevelList: document.getElementById("community-level-list"),
+      communitySortSummary: document.getElementById("community-sort-summary"),
+      communitySortButtons: [...document.querySelectorAll("[data-community-sort]")],
       appShell: document.querySelector(".app-shell"),
       communityGameMenu: document.getElementById("community-game-menu"),
       communityGameName: document.getElementById("community-game-name"),
@@ -164,6 +167,9 @@
       distanceValue: document.getElementById("distance-value"),
       scoreValue: document.getElementById("score-value"),
       gameMessage: document.getElementById("game-message"),
+      gameFrame: document.querySelector(".game-frame"),
+      mobileJumpButton: document.getElementById("mobile-jump-button"),
+      mobileRestartButton: document.getElementById("mobile-restart-button"),
       validationSuccessOverlay: document.getElementById("validation-success-overlay"),
       validationSuccessScreen: document.getElementById("validation-success-screen"),
       shareValidatedLevelButton: document.getElementById("share-validated-level-button"),
@@ -281,6 +287,7 @@
     let isRestoringWorkspace = true;
     let zoomRatio = 1;
     let communityLevels = [];
+    let communitySortKey = "moment";
     let activeCommunityLevel = null;
     let pendingRatingLevelIds = new Set();
     let communitySessionLevelId = "";
@@ -300,6 +307,22 @@
       if (elements.communityStatus) {
         elements.communityStatus.textContent = message;
       }
+    };
+
+    const hasCoarsePointer = () => window.matchMedia
+      && window.matchMedia("(pointer: coarse)").matches;
+
+    const isMobileViewport = () => window.matchMedia
+      && window.matchMedia("(max-width: 1359px)").matches;
+
+    const isMobileEditorLocked = () => isMobileViewport() && hasCoarsePointer();
+
+    const isMobileCommunityHomeLayout = () => isMobileViewport() && hasCoarsePointer();
+
+    const showMobileEditorLockedMessage = () => {
+      const message = "Editor is temporarily unavailable on mobile.";
+      setCommunityStatus(message);
+      setWorkspaceMessage(message);
     };
 
     const setActiveView = (viewName) => {
@@ -807,54 +830,305 @@
       return wrapper;
     };
 
+    const communitySorts = {
+      moment: {
+        label: "Top moment",
+        summary: "Sorted by momentum, rating, plays and freshness."
+      },
+      mostPlayed: {
+        label: "Most played",
+        summary: "Sorted by total plays."
+      },
+      bestRated: {
+        label: "Best rated",
+        summary: "Sorted by average rating, then rating count."
+      },
+      leastCleared: {
+        label: "Hardest",
+        summary: "Sorted by the lowest clear rate among played levels."
+      },
+      mostDeaths: {
+        label: "Most deaths",
+        summary: "Sorted by total deaths."
+      },
+      newest: {
+        label: "Newest",
+        summary: "Sorted by publish date."
+      },
+      mostCleared: {
+        label: "Most cleared",
+        summary: "Sorted by total clears."
+      },
+      highestClearRate: {
+        label: "Cleanest",
+        summary: "Sorted by the highest clear rate among played levels."
+      },
+      undiscovered: {
+        label: "Undiscovered",
+        summary: "Sorted by the least played recent levels."
+      }
+    };
+
+    const getLevelNumber = (level, key) => Math.max(0, Number(level && level[key]) || 0);
+
+    const getLevelCreatedAt = (level) => {
+      const timestamp = Date.parse(level && level.created_at ? level.created_at : "");
+      return Number.isFinite(timestamp) ? timestamp : 0;
+    };
+
+    const getLevelAgeDays = (level) => {
+      const timestamp = getLevelCreatedAt(level);
+      if (!timestamp) {
+        return 90;
+      }
+
+      return Math.max(0, (Date.now() - timestamp) / 86400000);
+    };
+
+    const getClearRate = (level) => {
+      const plays = getLevelNumber(level, "plays");
+      if (!plays) {
+        return 0;
+      }
+
+      return Math.min(1, getLevelNumber(level, "successes") / plays);
+    };
+
+    const getDeathRate = (level) => {
+      const plays = getLevelNumber(level, "plays");
+      if (!plays) {
+        return 0;
+      }
+
+      return getLevelNumber(level, "deaths") / plays;
+    };
+
+    const getMomentScore = (level) => {
+      const plays = getLevelNumber(level, "plays");
+      const deaths = getLevelNumber(level, "deaths");
+      const successes = getLevelNumber(level, "successes");
+      const ratingCount = getLevelNumber(level, "rating_count");
+      const ratingScore = getAverageRating(level) * Math.log2(ratingCount + 2) * 4;
+      const activityScore = Math.log2(plays + 1) * 8 + Math.log2(successes + 1) * 5 + Math.log2(deaths + 1) * 2;
+      const freshnessScore = 22 / (1 + getLevelAgeDays(level) / 10);
+      return activityScore + ratingScore + freshnessScore;
+    };
+
+    const compareNewest = (a, b) => getLevelCreatedAt(b) - getLevelCreatedAt(a);
+
+    const compareByName = (a, b) => String(a.name || "").localeCompare(String(b.name || ""));
+
+    const comparePlayedFirst = (a, b) => {
+      const aPlayed = getLevelNumber(a, "plays") > 0 ? 1 : 0;
+      const bPlayed = getLevelNumber(b, "plays") > 0 ? 1 : 0;
+      return bPlayed - aPlayed;
+    };
+
+    const compareLevelFallback = (a, b) => (
+      compareNewest(a, b)
+      || compareByName(a, b)
+    );
+
+    const sortCommunityLevels = (levels, sortKey = communitySortKey) => {
+      const source = Array.isArray(levels) ? [...levels] : [];
+      return source.sort((a, b) => {
+        if (sortKey === "mostPlayed") {
+          return getLevelNumber(b, "plays") - getLevelNumber(a, "plays")
+            || getMomentScore(b) - getMomentScore(a)
+            || compareLevelFallback(a, b);
+        }
+
+        if (sortKey === "bestRated") {
+          return getAverageRating(b) - getAverageRating(a)
+            || getLevelNumber(b, "rating_count") - getLevelNumber(a, "rating_count")
+            || getMomentScore(b) - getMomentScore(a)
+            || compareLevelFallback(a, b);
+        }
+
+        if (sortKey === "leastCleared") {
+          return comparePlayedFirst(a, b)
+            || getClearRate(a) - getClearRate(b)
+            || getDeathRate(b) - getDeathRate(a)
+            || getLevelNumber(b, "deaths") - getLevelNumber(a, "deaths")
+            || compareLevelFallback(a, b);
+        }
+
+        if (sortKey === "mostDeaths") {
+          return getLevelNumber(b, "deaths") - getLevelNumber(a, "deaths")
+            || getDeathRate(b) - getDeathRate(a)
+            || compareLevelFallback(a, b);
+        }
+
+        if (sortKey === "newest") {
+          return compareNewest(a, b) || getMomentScore(b) - getMomentScore(a) || compareByName(a, b);
+        }
+
+        if (sortKey === "mostCleared") {
+          return getLevelNumber(b, "successes") - getLevelNumber(a, "successes")
+            || getClearRate(b) - getClearRate(a)
+            || compareLevelFallback(a, b);
+        }
+
+        if (sortKey === "highestClearRate") {
+          return comparePlayedFirst(a, b)
+            || getClearRate(b) - getClearRate(a)
+            || getLevelNumber(b, "successes") - getLevelNumber(a, "successes")
+            || compareLevelFallback(a, b);
+        }
+
+        if (sortKey === "undiscovered") {
+          return getLevelNumber(a, "plays") - getLevelNumber(b, "plays")
+            || compareNewest(a, b)
+            || getAverageRating(b) - getAverageRating(a)
+            || compareByName(a, b);
+        }
+
+        return getMomentScore(b) - getMomentScore(a)
+          || getAverageRating(b) - getAverageRating(a)
+          || getLevelNumber(b, "plays") - getLevelNumber(a, "plays")
+          || compareLevelFallback(a, b);
+      });
+    };
+
+    const getFeaturedCommunityLevelLimit = () => (isMobileCommunityHomeLayout() ? 2 : 3);
+
+    const getFeaturedCommunityLevels = () => (
+      sortCommunityLevels(communityLevels, "moment").slice(0, getFeaturedCommunityLevelLimit())
+    );
+
+    const createCommunityEmptyCard = (title, message) => {
+      const empty = document.createElement("article");
+      empty.className = "community-empty";
+      const titleElement = document.createElement("strong");
+      titleElement.textContent = title;
+      const messageElement = document.createElement("span");
+      messageElement.textContent = message;
+      empty.append(titleElement, messageElement);
+      return empty;
+    };
+
+    const createCommunityStatItem = (label, value) => {
+      const item = document.createElement("span");
+      const amount = document.createElement("strong");
+      amount.textContent = String(value);
+      item.append(amount, label);
+      return item;
+    };
+
+    const createCommunityLevelCard = (level, options = {}) => {
+      const card = document.createElement("article");
+      card.className = "community-level-card";
+      if (options.featured) {
+        card.classList.add("is-featured");
+      }
+      if (options.rank === 1) {
+        card.classList.add("is-featured-primary");
+      }
+
+      const title = document.createElement("div");
+      title.className = "community-level-title";
+      const titleCopy = document.createElement("div");
+      titleCopy.className = "community-level-title-copy";
+      const name = document.createElement("h3");
+      name.textContent = level.name || "Untitled level";
+      const meta = document.createElement("span");
+      meta.textContent = level.created_at ? new Date(level.created_at).toLocaleDateString() : "Community";
+      titleCopy.append(name, meta);
+      title.appendChild(titleCopy);
+
+      if (options.featured) {
+        const rank = document.createElement("span");
+        rank.className = "community-rank-badge";
+        rank.textContent = `Top ${options.rank || 1}`;
+        title.appendChild(rank);
+      }
+
+      const stats = document.createElement("div");
+      stats.className = "community-stats";
+      [
+        ["Played", getLevelNumber(level, "plays")],
+        ["Deaths", getLevelNumber(level, "deaths")],
+        ["Clears", getLevelNumber(level, "successes")]
+      ].forEach(([label, value]) => {
+        stats.appendChild(createCommunityStatItem(label, value));
+      });
+
+      const actions = document.createElement("div");
+      actions.className = "community-card-actions";
+      actions.appendChild(renderStars(level));
+      const playButton = document.createElement("button");
+      playButton.type = "button";
+      playButton.className = "primary-action";
+      playButton.dataset.playCommunityLevel = level.id;
+      playButton.textContent = "Play";
+      actions.appendChild(playButton);
+
+      card.append(title, stats, actions);
+      return card;
+    };
+
+    const updateCommunitySortControls = () => {
+      const sortConfig = communitySorts[communitySortKey] || communitySorts.moment;
+      if (elements.communitySortSummary) {
+        elements.communitySortSummary.textContent = sortConfig.summary;
+      }
+
+      elements.communitySortButtons.forEach((button) => {
+        const active = button.dataset.communitySort === communitySortKey;
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-selected", String(active));
+      });
+    };
+
     const renderCommunityLevels = () => {
+      if (elements.communityFeaturedList) {
+        elements.communityFeaturedList.innerHTML = "";
+      }
       elements.communityLevelList.innerHTML = "";
+      updateCommunitySortControls();
       if (!communityLevels.length) {
-        const empty = document.createElement("article");
-        empty.className = "community-empty";
-        empty.innerHTML = "<strong>No published level yet</strong><span>Validate and publish the first community level from the editor.</span>";
-        elements.communityLevelList.appendChild(empty);
+        if (elements.communityFeaturedList) {
+          elements.communityFeaturedList.appendChild(createCommunityEmptyCard(
+            "No featured level yet",
+            "Published levels will appear here as the community plays them."
+          ));
+        }
+        elements.communityLevelList.appendChild(createCommunityEmptyCard(
+          "No published level yet",
+          "Validate and publish the first community level from the editor."
+        ));
         return;
       }
 
-      const fragment = document.createDocumentFragment();
-      communityLevels.forEach((level) => {
-        const card = document.createElement("article");
-        card.className = "community-level-card";
-
-        const title = document.createElement("div");
-        title.className = "community-level-title";
-        const name = document.createElement("h3");
-        name.textContent = level.name || "Untitled level";
-        const created = document.createElement("span");
-        created.textContent = level.created_at ? new Date(level.created_at).toLocaleDateString() : "Community";
-        title.append(name, created);
-
-        const stats = document.createElement("div");
-        stats.className = "community-stats";
-        [
-          ["Played", level.plays || 0],
-          ["Deaths", level.deaths || 0],
-          ["Clears", level.successes || 0]
-        ].forEach(([label, value]) => {
-          const item = document.createElement("span");
-          item.innerHTML = `<strong>${value}</strong>${label}`;
-          stats.appendChild(item);
+      const featuredLevels = getFeaturedCommunityLevels();
+      const featuredIds = new Set(featuredLevels.map((level) => String(level.id)));
+      if (elements.communityFeaturedList) {
+        const featuredFragment = document.createDocumentFragment();
+        featuredLevels.forEach((level, index) => {
+          featuredFragment.appendChild(createCommunityLevelCard(level, {
+            featured: true,
+            rank: index + 1
+          }));
         });
+        elements.communityFeaturedList.appendChild(featuredFragment);
+      }
 
-        const actions = document.createElement("div");
-        actions.className = "community-card-actions";
-        actions.appendChild(renderStars(level));
-        const playButton = document.createElement("button");
-        playButton.type = "button";
-        playButton.className = "primary-action";
-        playButton.dataset.playCommunityLevel = level.id;
-        playButton.textContent = "Play";
-        actions.appendChild(playButton);
-
-        card.append(title, stats, actions);
-        fragment.appendChild(card);
+      const otherLevels = sortCommunityLevels(
+        communityLevels.filter((level) => !featuredIds.has(String(level.id))),
+        communitySortKey
+      );
+      const fragment = document.createDocumentFragment();
+      otherLevels.forEach((level) => {
+        fragment.appendChild(createCommunityLevelCard(level));
       });
+
+      if (!otherLevels.length) {
+        elements.communityLevelList.appendChild(createCommunityEmptyCard(
+          "No other levels yet",
+          "Once more community levels are published, this list will fill up."
+        ));
+        return;
+      }
 
       elements.communityLevelList.appendChild(fragment);
     };
@@ -893,6 +1167,11 @@
     };
 
     const openEditor = () => {
+      if (isMobileEditorLocked()) {
+        showMobileEditorLockedMessage();
+        return;
+      }
+
       document.body.classList.remove("is-community-home");
       window.scrollTo(0, 0);
       activeCommunityLevel = null;
@@ -1204,6 +1483,29 @@
     };
 
     const shouldIgnoreGameShortcut = (event) => isTypingTarget(event.target) || hasBlockingModalOpen();
+
+    const isMobileGameplayPointer = (event) => Boolean(event)
+      && (event.pointerType === "touch" || event.pointerType === "pen" || hasCoarsePointer());
+
+    const isGameViewActive = () => elements.gameView.classList.contains("is-active");
+
+    const queueMobileJump = (event) => {
+      if (!gameScene || !isGameViewActive() || shouldIgnoreGameShortcut(event) || !isMobileGameplayPointer(event)) {
+        return;
+      }
+
+      event.preventDefault();
+      gameScene.queueJump();
+    };
+
+    const queueMobileRestart = (event) => {
+      if (!gameScene || !isGameViewActive() || shouldIgnoreGameShortcut(event) || !isMobileGameplayPointer(event)) {
+        return;
+      }
+
+      event.preventDefault();
+      gameScene.queueRestart();
+    };
 
     const setClearLevelStep = (step) => {
       const finalStep = step === 2;
@@ -1606,7 +1908,7 @@
       await rateCommunityLevel(activeCommunityLevel.id, ratingButton.dataset.communityClearRating);
       renderCommunityClearRating();
     });
-    elements.communityLevelList.addEventListener("click", (event) => {
+    const handleCommunityLevelCardClick = (event) => {
       const playButton = event.target.closest("[data-play-community-level]");
       if (playButton) {
         const level = getCommunityLevel(playButton.dataset.playCommunityLevel);
@@ -1619,6 +1921,26 @@
       const ratingButton = event.target.closest("[data-rating]");
       if (ratingButton) {
         rateCommunityLevel(ratingButton.dataset.levelId, ratingButton.dataset.rating);
+      }
+    };
+    if (elements.communityFeaturedList) {
+      elements.communityFeaturedList.addEventListener("click", handleCommunityLevelCardClick);
+    }
+    elements.communityLevelList.addEventListener("click", handleCommunityLevelCardClick);
+    elements.communitySortButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const sortKey = button.dataset.communitySort;
+        if (!communitySorts[sortKey] || communitySortKey === sortKey) {
+          return;
+        }
+
+        communitySortKey = sortKey;
+        renderCommunityLevels();
+      });
+    });
+    window.addEventListener("resize", () => {
+      if (document.body.classList.contains("is-community-home") && communityLevels.length) {
+        renderCommunityLevels();
       }
     });
 
@@ -1676,6 +1998,26 @@
       restartCurrentRun();
     });
     elements.exitGameButton.addEventListener("click", returnToEditor);
+    if (elements.mobileJumpButton) {
+      elements.mobileJumpButton.addEventListener("pointerdown", (event) => {
+        event.stopPropagation();
+        queueMobileJump(event);
+      });
+    }
+    if (elements.mobileRestartButton) {
+      elements.mobileRestartButton.addEventListener("pointerdown", (event) => {
+        event.stopPropagation();
+        queueMobileRestart(event);
+      });
+    }
+    if (elements.gameFrame) {
+      elements.gameFrame.addEventListener("pointerdown", (event) => {
+        if (event.target.closest(".mobile-control-button")) {
+          return;
+        }
+        queueMobileJump(event);
+      });
+    }
 
     elements.validateLevelButton.addEventListener("click", startValidation);
     elements.startValidationButton.addEventListener("click", startValidation);
