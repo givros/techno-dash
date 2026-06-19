@@ -258,7 +258,7 @@
           return;
         }
 
-        if (obstacleElement) {
+        if (obstacleElement && !this.isPlacementTool(this.selectedTool)) {
           this.selectObstacle(obstacleElement.dataset.id);
           return;
         }
@@ -962,6 +962,11 @@
 
     getDecorationTypeFromTool(tool) {
       return tool && tool.startsWith("decor-") ? tool.replace("decor-", "") : null;
+    }
+
+    isPlacementTool(tool) {
+      return Boolean(this.getDecorationTypeFromTool(tool))
+        || ["triangle", "platform", "solidBlock", "dirtBlock", "iceBlock", "grassBlock", "finish"].includes(tool);
     }
 
     findElementById(id) {
