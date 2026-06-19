@@ -37,6 +37,10 @@ body {
   letter-spacing: 0;
 }
 
+body.is-community-home {
+  overflow-y: auto;
+}
+
 button,
 input,
 select {
@@ -88,6 +92,13 @@ button {
   background-size: 32px 32px, 32px 32px, auto, auto;
 }
 
+body.is-community-home .community-home {
+  min-height: 100vh;
+  height: auto;
+  overflow: visible;
+  grid-template-rows: 90px auto;
+}
+
 .community-home[hidden] {
   display: none;
 }
@@ -115,6 +126,10 @@ button {
   grid-template-rows: auto minmax(0, 1fr);
   gap: 16px;
   padding: 22px 28px 28px;
+}
+
+body.is-community-home .community-shell {
+  grid-template-rows: auto auto;
 }
 
 .community-intro {
@@ -154,6 +169,10 @@ button {
   align-content: start;
   gap: 14px;
   padding-right: 6px;
+}
+
+body.is-community-home .community-level-list {
+  overflow: visible;
 }
 
 .community-level-card,

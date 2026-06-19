@@ -879,6 +879,8 @@
       if (gameScene) {
         gameScene.stop();
       }
+      document.body.classList.add("is-community-home");
+      window.scrollTo(0, 0);
       activeCommunityLevel = null;
       communitySessionLevelId = "";
       communitySessionAttempts = 0;
@@ -891,6 +893,8 @@
     };
 
     const openEditor = () => {
+      document.body.classList.remove("is-community-home");
+      window.scrollTo(0, 0);
       activeCommunityLevel = null;
       communitySessionLevelId = "";
       communitySessionAttempts = 0;
@@ -992,6 +996,8 @@
       };
 
       const levelData = getCommunityLevelData(level);
+      document.body.classList.remove("is-community-home");
+      window.scrollTo(0, 0);
       elements.homeView.hidden = true;
       elements.appShell.classList.remove("is-hidden");
       elements.appShell.classList.remove("is-validation-mode");
