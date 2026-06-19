@@ -96,8 +96,10 @@
         enter: Phaser.Input.Keyboard.KeyCodes.ENTER,
         r: Phaser.Input.Keyboard.KeyCodes.R
       });
-      this.input.keyboard.on("keydown-ENTER", () => {
-        this.restartQueued = true;
+      this.input.keyboard.on("keydown-ENTER", (event) => {
+        if (!this.shouldIgnoreKeyboardEvent(event)) {
+          this.restartQueued = true;
+        }
       });
       this.handleGlobalKeydown = (event) => this.onGlobalKeydown(event);
       window.addEventListener("keydown", this.handleGlobalKeydown);
@@ -196,7 +198,14 @@
         return;
       }
 
-      const restartDown = this.keys.r.isDown || this.keys.enter.isDown || (this.ended && this.keys.space.isDown);
+      const keyboardBlocked = this.shouldIgnoreGameKeyboard();
+      if (keyboardBlocked) {
+        this.restartQueued = false;
+      }
+
+      const restartDown = keyboardBlocked
+        ? false
+        : this.keys.r.isDown || this.keys.enter.isDown || (this.ended && this.keys.space.isDown);
       const restartTriggered = (restartDown && !this.restartWasDown) || this.restartQueued;
       if (restartTriggered) {
         this.restartFromInput(restartDown);
@@ -208,7 +217,7 @@
       if (this.running && !this.ended) {
         const settings = this.getRuntimeSettings();
         const deltaSeconds = Math.min(deltaMs / 1000, 0.033);
-        const spaceDown = this.keys.space.isDown;
+        const spaceDown = keyboardBlocked ? false : this.keys.space.isDown;
         const inputContext = {
           spacePressed: (spaceDown && !this.spaceWasDown) || this.jumpQueued,
           playerGrounded: this.player.grounded
@@ -247,7 +256,7 @@
           this.checkCollisions(inputContext);
         }
       } else {
-        this.spaceWasDown = this.keys.space.isDown;
+        this.spaceWasDown = keyboardBlocked ? false : this.keys.space.isDown;
         this.jumpQueued = false;
       }
 
@@ -304,6 +313,10 @@
     }
 
     onGlobalKeydown(event) {
+      if (this.shouldIgnoreKeyboardEvent(event)) {
+        return;
+      }
+
       if (event.code === "Space" || event.key === " ") {
         event.preventDefault();
         if (this.ended) {
@@ -324,6 +337,28 @@
         event.preventDefault();
         this.restartQueued = true;
       }
+    }
+
+    shouldIgnoreKeyboardEvent(event) {
+      return Boolean(event && event.defaultPrevented) || this.shouldIgnoreGameKeyboard(event && event.target);
+    }
+
+    shouldIgnoreGameKeyboard(target = document.activeElement) {
+      if (this.isTypingTarget(target)) {
+        return true;
+      }
+
+      return Boolean(document.querySelector(
+        ".maker-modal:not([hidden]), .stats-modal:not([hidden]), .validation-success-screen:not([hidden])"
+      ));
+    }
+
+    isTypingTarget(target) {
+      if (!target || typeof target.closest !== "function") {
+        return false;
+      }
+
+      return Boolean(target.closest("input, textarea, select, [contenteditable='true'], [contenteditable='']"));
     }
 
     checkCollisions(inputContext = {}) {

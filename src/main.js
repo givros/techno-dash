@@ -1087,6 +1087,10 @@
       elements.confirmPublishButton.disabled = false;
       ensureValidationSuccessScreen().hidden = true;
       openModal(elements.publishModal);
+      window.setTimeout(() => {
+        elements.publishLevelNameInput.focus();
+        elements.publishLevelNameInput.select();
+      }, 0);
     };
 
     const publishValidatedLevel = async () => {
@@ -1168,8 +1172,7 @@
       }
     };
 
-    const closeAllModals = () => {
-      [
+    const getBlockingModals = () => [
         elements.propertiesModal,
         elements.publishModal,
         elements.validationModal,
@@ -1178,8 +1181,23 @@
         elements.selectionModal,
         elements.statsModal,
         elements.communityClearModal
-      ].forEach((modal) => closeModal(modal));
+      ];
+
+    const closeAllModals = () => {
+      getBlockingModals().forEach((modal) => closeModal(modal));
     };
+
+    const hasBlockingModalOpen = () => getBlockingModals().some((modal) => modal && !modal.hidden);
+
+    const isTypingTarget = (target) => {
+      if (!target || typeof target.closest !== "function") {
+        return false;
+      }
+
+      return Boolean(target.closest("input, textarea, select, [contenteditable='true'], [contenteditable='']"));
+    };
+
+    const shouldIgnoreGameShortcut = (event) => isTypingTarget(event.target) || hasBlockingModalOpen();
 
     const setClearLevelStep = (step) => {
       const finalStep = step === 2;
@@ -1725,6 +1743,7 @@
       const canRestartCurrentRun = gameScene
         && elements.gameView.classList.contains("is-active")
         && ["test", "validation", "community"].includes(gameRunMode)
+        && !shouldIgnoreGameShortcut(event)
         && isRestartIntent;
       if (canRestartCurrentRun) {
         event.preventDefault();

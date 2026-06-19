@@ -56,11 +56,52 @@
         return;
       }
 
-      this.decorPalette.querySelectorAll("[data-dynamic-decor]").forEach((button) => button.remove());
-      window.TechnoDash.Level.getDecorationTypes().forEach((decoration) => {
-        const button = this.createDecorationToolButton(decoration);
-        this.decorPalette.appendChild(button);
+      this.decorPalette.querySelectorAll("[data-dynamic-decor]").forEach((element) => element.remove());
+      const groups = this.groupDecorationsByTheme(window.TechnoDash.Level.getDecorationTypes());
+      groups.forEach((group) => {
+        const section = document.createElement("section");
+        section.className = "decor-category";
+        section.dataset.dynamicDecor = "true";
+
+        const title = document.createElement("h3");
+        title.className = "decor-category-title";
+        title.textContent = group.label;
+        section.appendChild(title);
+
+        const grid = document.createElement("div");
+        grid.className = "decor-category-grid";
+        group.decorations.forEach((decoration) => {
+          const button = this.createDecorationToolButton(decoration);
+          grid.appendChild(button);
+        });
+        section.appendChild(grid);
+        this.decorPalette.appendChild(section);
       });
+    }
+
+    groupDecorationsByTheme(decorations) {
+      const themeOrder = ["city", "winter", "forest"];
+      const themeLabels = {
+        city: "City",
+        winter: "Winter",
+        forest: "Forest",
+        other: "Other"
+      };
+      const groups = new Map(themeOrder.map((theme) => [theme, []]));
+      decorations.forEach((decoration) => {
+        const theme = themeOrder.includes(decoration.theme) ? decoration.theme : "other";
+        if (!groups.has(theme)) {
+          groups.set(theme, []);
+        }
+        groups.get(theme).push(decoration);
+      });
+
+      return [...groups.entries()]
+        .filter(([, groupDecorations]) => groupDecorations.length > 0)
+        .map(([theme, groupDecorations]) => ({
+          label: themeLabels[theme] || this.formatDecorationLabel({ type: theme }),
+          decorations: groupDecorations
+        }));
     }
 
     createDecorationToolButton(decoration) {
