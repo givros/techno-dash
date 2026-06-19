@@ -17,6 +17,11 @@
       this.restartWasDown = false;
       this.jumpQueued = false;
       this.restartQueued = false;
+      this.keyState = {
+        space: false,
+        enter: false,
+        r: false
+      };
       this.pendingPlay = false;
       this.programFeatures = GameScene.createProgramFeatures({ activeBlockIds: [] });
       this.decorSprites = new Map();
@@ -91,20 +96,13 @@
       this.levelGraphics.setDepth(2);
       this.player = new window.TechnoDash.Player(this, this.playerX, this.groundY);
       this.syncProgramVisuals();
-      this.keys = this.input.keyboard.addKeys({
-        space: Phaser.Input.Keyboard.KeyCodes.SPACE,
-        enter: Phaser.Input.Keyboard.KeyCodes.ENTER,
-        r: Phaser.Input.Keyboard.KeyCodes.R
-      });
-      this.input.keyboard.on("keydown-ENTER", (event) => {
-        if (!this.shouldIgnoreKeyboardEvent(event)) {
-          this.restartQueued = true;
-        }
-      });
       this.handleGlobalKeydown = (event) => this.onGlobalKeydown(event);
+      this.handleGlobalKeyup = (event) => this.onGlobalKeyup(event);
       window.addEventListener("keydown", this.handleGlobalKeydown);
+      window.addEventListener("keyup", this.handleGlobalKeyup);
       this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
         window.removeEventListener("keydown", this.handleGlobalKeydown);
+        window.removeEventListener("keyup", this.handleGlobalKeyup);
       });
 
       this.created = true;
@@ -201,11 +199,12 @@
       const keyboardBlocked = this.shouldIgnoreGameKeyboard();
       if (keyboardBlocked) {
         this.restartQueued = false;
+        this.clearKeyState();
       }
 
       const restartDown = keyboardBlocked
         ? false
-        : this.keys.r.isDown || this.keys.enter.isDown || (this.ended && this.keys.space.isDown);
+        : this.keyState.r || this.keyState.enter || (this.ended && this.keyState.space);
       const restartTriggered = (restartDown && !this.restartWasDown) || this.restartQueued;
       if (restartTriggered) {
         this.restartFromInput(restartDown);
@@ -217,7 +216,7 @@
       if (this.running && !this.ended) {
         const settings = this.getRuntimeSettings();
         const deltaSeconds = Math.min(deltaMs / 1000, 0.033);
-        const spaceDown = keyboardBlocked ? false : this.keys.space.isDown;
+        const spaceDown = keyboardBlocked ? false : this.keyState.space;
         const inputContext = {
           spacePressed: (spaceDown && !this.spaceWasDown) || this.jumpQueued,
           playerGrounded: this.player.grounded
@@ -256,7 +255,7 @@
           this.checkCollisions(inputContext);
         }
       } else {
-        this.spaceWasDown = keyboardBlocked ? false : this.keys.space.isDown;
+        this.spaceWasDown = keyboardBlocked ? false : this.keyState.space;
         this.jumpQueued = false;
       }
 
@@ -268,7 +267,7 @@
       this.restartQueued = false;
       this.reset(true);
       this.restartWasDown = Boolean(restartDown);
-      this.spaceWasDown = Boolean(this.keys && this.keys.space && this.keys.space.isDown);
+      this.spaceWasDown = Boolean(this.keyState.space);
       this.jumpQueued = false;
     }
 
@@ -318,10 +317,11 @@
       }
 
       if (event.code === "Space" || event.key === " ") {
+        this.keyState.space = true;
         event.preventDefault();
-        if (this.ended) {
+        if (this.ended && !event.repeat) {
           this.restartQueued = true;
-        } else {
+        } else if (!event.repeat) {
           this.jumpQueued = true;
         }
         return;
@@ -334,9 +334,44 @@
         || event.keyCode === 13
         || event.which === 13;
       if (isEnter || event.code === "KeyR" || event.key === "r" || event.key === "R") {
+        if (isEnter) {
+          this.keyState.enter = true;
+        } else {
+          this.keyState.r = true;
+        }
         event.preventDefault();
-        this.restartQueued = true;
+        if (!event.repeat) {
+          this.restartQueued = true;
+        }
       }
+    }
+
+    onGlobalKeyup(event) {
+      if (event.code === "Space" || event.key === " ") {
+        this.keyState.space = false;
+        return;
+      }
+
+      const isEnter = event.code === "Enter"
+        || event.code === "NumpadEnter"
+        || event.key === "Enter"
+        || event.key === "Return"
+        || event.keyCode === 13
+        || event.which === 13;
+      if (isEnter) {
+        this.keyState.enter = false;
+        return;
+      }
+
+      if (event.code === "KeyR" || event.key === "r" || event.key === "R") {
+        this.keyState.r = false;
+      }
+    }
+
+    clearKeyState() {
+      this.keyState.space = false;
+      this.keyState.enter = false;
+      this.keyState.r = false;
     }
 
     shouldIgnoreKeyboardEvent(event) {
