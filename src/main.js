@@ -309,6 +309,17 @@
       }
     };
 
+    const setTextIfChanged = (element, value) => {
+      if (!element) {
+        return;
+      }
+
+      const text = String(value);
+      if (element.textContent !== text) {
+        element.textContent = text;
+      }
+    };
+
     const hasCoarsePointer = () => window.matchMedia
       && window.matchMedia("(pointer: coarse)").matches;
 
@@ -664,9 +675,9 @@
     };
 
     const updateGameStats = (stats) => {
-      elements.gameStateLabel.textContent = stats.status;
-      elements.distanceValue.textContent = stats.showDistance ? stats.distance : "-";
-      elements.scoreValue.textContent = stats.showScore ? stats.score : "-";
+      setTextIfChanged(elements.gameStateLabel, stats.status);
+      setTextIfChanged(elements.distanceValue, stats.showDistance ? stats.distance : "-");
+      setTextIfChanged(elements.scoreValue, stats.showScore ? stats.score : "-");
       syncValidationRunStartFromStats(stats);
       updateCommunityRunFromStats(stats);
       if (gameRunMode === "validation" && (stats.reachedFinish || stats.status === "Victory")) {
@@ -678,7 +689,9 @@
         return;
       }
 
-      elements.gameMessage.textContent = stats.status;
+      setTextIfChanged(elements.gameMessage, stats.status);
+      elements.gameMessage.dataset.grounded = String(Boolean(stats.grounded));
+      elements.gameMessage.dataset.playerY = String(stats.playerY);
       elements.gameMessage.classList.toggle("is-gameover", stats.status === "Game Over");
       elements.gameMessage.classList.toggle("is-victory", stats.status === "Victory");
       elements.gameMessage.classList.toggle("is-validated", stats.status === "Validated");
@@ -1560,6 +1573,17 @@
         height: gameViewport.height,
         backgroundColor: levelData.settings.backgroundColor || "#071322",
         scene: [gameScene],
+        fps: {
+          target: 60,
+          min: 30,
+          smoothStep: true
+        },
+        render: {
+          antialias: false,
+          pixelArt: true,
+          roundPixels: true,
+          powerPreference: "high-performance"
+        },
         scale: {
           mode: Phaser.Scale.FIT,
           autoCenter: Phaser.Scale.CENTER_BOTH

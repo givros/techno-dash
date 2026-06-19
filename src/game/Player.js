@@ -25,8 +25,8 @@
       this.syncSprite();
     }
 
-    tryJump(jumpForce) {
-      if (!this.grounded) {
+    tryJump(jumpForce, options = {}) {
+      if (!this.grounded && !options.allowAirborne) {
         return false;
       }
 

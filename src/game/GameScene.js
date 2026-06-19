@@ -16,7 +16,24 @@
       this.spaceWasDown = false;
       this.restartWasDown = false;
       this.jumpQueued = false;
+      this.jumpQueuedAt = 0;
       this.restartQueued = false;
+      this.jumpBufferMs = 120;
+      this.coyoteMs = 70;
+      this.maxFrameDeltaMs = 50;
+      this.maxPhysicsStepMs = 1000 / 60;
+      this.lastGroundedTime = 0;
+      this.lastUpdateTime = 0;
+      this.frameHadJumpPress = false;
+      this.frameScreenObjects = null;
+      this.frameDecorations = null;
+      this.frameScreenObjectsScrollX = null;
+      this.frameDecorationsScrollX = null;
+      this.staticWorldDirty = true;
+      this.staticWorldSignature = "";
+      this.lastStatsPublishTime = 0;
+      this.statsPublishIntervalMs = 80;
+      this.lastPublishedStats = null;
       this.keyState = {
         space: false,
         enter: false,
@@ -40,6 +57,24 @@
       const loopIndex = gameplayBlocks.indexOf("loop");
       const loopBlocks = loopIndex === -1 ? [] : gameplayBlocks.slice(loopIndex + 1);
       const loopSet = new Set(loopBlocks);
+      const actionConditions = {};
+      loopBlocks.forEach((blockId, actionIndex) => {
+        if (GameScene.isConditionBlock(blockId) || actionConditions[blockId]) {
+          return;
+        }
+
+        const conditions = [];
+        for (let index = actionIndex - 1; index >= 0; index -= 1) {
+          const conditionId = loopBlocks[index];
+          if (!GameScene.isConditionBlock(conditionId)) {
+            break;
+          }
+
+          conditions.unshift(conditionId);
+        }
+
+        actionConditions[blockId] = conditions;
+      });
 
       return {
         active,
@@ -47,6 +82,7 @@
         gameplayBlocks,
         loopBlocks,
         loopSet,
+        actionConditions,
         hasLoop: loopIndex !== -1,
         background: active.has("addBackground"),
         player: active.has("addPlayer"),
@@ -92,6 +128,8 @@
       this.level = new window.TechnoDash.Level(this.levelData);
       this.backgroundGraphics = this.add.graphics();
       this.backgroundGraphics.setDepth(0);
+      this.gridGraphics = this.add.graphics();
+      this.gridGraphics.setDepth(0.5);
       this.levelGraphics = this.add.graphics();
       this.levelGraphics.setDepth(2);
       this.player = new window.TechnoDash.Player(this, this.playerX, this.groundY);
@@ -112,11 +150,13 @@
 
     setCallbacks(callbacks) {
       this.uiCallbacks = callbacks || {};
-      this.publishState();
+      this.publishState({ force: true });
     }
 
     setProgramState(programState) {
       this.programFeatures = GameScene.createProgramFeatures(programState);
+      this.staticWorldDirty = true;
+      this.invalidateFrameCache();
 
       if (!this.created) {
         return;
@@ -127,7 +167,7 @@
         this.reset(false);
       } else {
         this.renderWorld();
-        this.publishState();
+        this.publishState({ force: true });
       }
     }
 
@@ -139,6 +179,7 @@
 
     loadLevel(levelData, options = {}) {
       this.levelData = window.TechnoDash.Level.normalize(levelData);
+      this.staticWorldDirty = true;
 
       if (!this.created) {
         this.pendingPlay = Boolean(options.play);
@@ -146,6 +187,7 @@
       }
 
       this.level = new window.TechnoDash.Level(this.levelData);
+      this.invalidateFrameCache();
       this.reset(Boolean(options.play));
     }
 
@@ -161,17 +203,18 @@
 
       this.running = true;
       this.status = "Playing";
-      this.publishState();
+      this.publishState({ force: true });
     }
 
     stop() {
       this.running = false;
       this.status = this.ended ? this.status : "Paused";
-      this.publishState();
+      this.publishState({ force: true });
     }
 
     reset(shouldPlay) {
       this.scrollX = 0;
+      this.invalidateFrameCache();
       this.distance = 0;
       this.score = 0;
       this.reachedFinish = false;
@@ -180,11 +223,14 @@
       this.status = shouldPlay ? "Playing" : "Ready";
       this.spaceWasDown = false;
       this.restartWasDown = false;
-      this.jumpQueued = false;
+      this.clearJumpRequest();
       this.restartQueued = false;
+      this.frameHadJumpPress = false;
+      this.lastGroundedTime = this.getCurrentTimeMs();
+      this.staticWorldDirty = true;
       this.player.reset(this.getRuntimeSettings());
       this.renderWorld();
-      this.publishState();
+      this.publishState({ force: true });
     }
 
     isPlaying() {
@@ -196,9 +242,13 @@
         return;
       }
 
+      this.lastUpdateTime = time;
+      this.beginFrameCache();
+
       const keyboardBlocked = this.shouldIgnoreGameKeyboard();
       if (keyboardBlocked) {
         this.restartQueued = false;
+        this.clearJumpRequest();
         this.clearKeyState();
       }
 
@@ -213,54 +263,80 @@
       this.restartQueued = false;
       this.restartWasDown = restartDown;
 
-      if (this.running && !this.ended) {
-        const settings = this.getRuntimeSettings();
-        const deltaSeconds = Math.min(deltaMs / 1000, 0.033);
-        const spaceDown = keyboardBlocked ? false : this.keyState.space;
-        const inputContext = {
-          spacePressed: (spaceDown && !this.spaceWasDown) || this.jumpQueued,
-          playerGrounded: this.player.grounded
-        };
+      const spaceDown = keyboardBlocked ? false : this.keyState.space;
+      if (!this.running || this.ended) {
+        this.spaceWasDown = spaceDown;
+        this.expireJumpRequest(time);
+        this.frameHadJumpPress = false;
+        return;
+      }
 
-        if (this.programFeatures.player && this.shouldRunAction("jump", inputContext)) {
-          this.player.tryJump(settings.jumpForce);
+      const settings = this.getRuntimeSettings();
+      if (spaceDown && !this.spaceWasDown) {
+        this.requestJump(time);
+      }
+      this.frameHadJumpPress = this.hasBufferedJump(time);
+
+      const totalDeltaMs = Math.max(0, Math.min(Number(deltaMs) || 0, this.maxFrameDeltaMs));
+      const stepCount = Math.max(1, Math.ceil(totalDeltaMs / this.maxPhysicsStepMs));
+      const stepMs = totalDeltaMs / stepCount;
+      const stepSeconds = stepMs / 1000;
+
+      for (let step = 0; step < stepCount; step += 1) {
+        if (!this.running || this.ended) {
+          break;
         }
+
+        const stepTime = time - totalDeltaMs + stepMs * (step + 1);
+        if (this.player.grounded) {
+          this.lastGroundedTime = stepTime;
+        }
+
+        this.tryRunBufferedJump(settings, stepTime);
 
         const previousScrollX = this.scrollX;
         if (this.hasLoopBlock("moveLevel")) {
-          this.scrollX += settings.speed * deltaSeconds;
+          this.scrollX += settings.speed * stepSeconds;
+          this.invalidateFrameCache();
         }
 
         const applyGravity = this.hasLoopBlock("applyGravity");
         const playerIsMoving = this.player.velocityY !== 0 || !this.player.grounded;
         if (this.programFeatures.player && (applyGravity || playerIsMoving)) {
           const previousPlayerBounds = this.player.getBounds();
-          this.player.update(deltaSeconds, settings, { applyGravity });
-          this.resolvePlatformCollisions(previousPlayerBounds);
+          this.player.update(stepSeconds, settings, { applyGravity });
+          if (this.resolvePlatformCollisions(previousPlayerBounds) || this.player.grounded) {
+            this.lastGroundedTime = stepTime;
+          }
+          this.tryRunBufferedJump(settings, stepTime);
         }
+
+        const inputContext = this.getInputContext(stepTime);
         const reachedFinish = this.checkFinishCollision(inputContext);
         const playerStoppedByLevel = reachedFinish
           ? false
           : this.resolveSolidBlockSideCollisions(previousScrollX);
 
-        this.jumpQueued = false;
-        this.spaceWasDown = spaceDown;
-        this.distance = Math.max(0, Math.floor(this.scrollX));
-        this.score = this.distance;
         if (reachedFinish) {
           // Victory has priority when the cube reaches the finish on the same frame as another collision.
-        } else if (playerStoppedByLevel) {
-          this.endGame("Game Over");
-        } else {
-          this.checkCollisions(inputContext);
+          break;
         }
-      } else {
-        this.spaceWasDown = keyboardBlocked ? false : this.keyState.space;
-        this.jumpQueued = false;
+
+        if (playerStoppedByLevel) {
+          this.endGame("Game Over");
+          break;
+        }
+
+        this.checkCollisions(inputContext);
       }
 
+      this.expireJumpRequest(time);
+      this.spaceWasDown = spaceDown;
+      this.distance = Math.max(0, Math.floor(this.scrollX));
+      this.score = this.distance;
+      this.frameHadJumpPress = false;
       this.renderWorld();
-      this.publishState();
+      this.publishState({ time });
     }
 
     restartFromInput(restartDown) {
@@ -268,7 +344,7 @@
       this.reset(true);
       this.restartWasDown = Boolean(restartDown);
       this.spaceWasDown = Boolean(this.keyState.space);
-      this.jumpQueued = false;
+      this.clearJumpRequest();
     }
 
     queueJump() {
@@ -281,7 +357,7 @@
         return;
       }
 
-      this.jumpQueued = true;
+      this.requestJump(this.getCurrentTimeMs());
     }
 
     queueRestart() {
@@ -290,6 +366,68 @@
       }
 
       this.restartQueued = true;
+    }
+
+    getCurrentTimeMs() {
+      if (typeof performance !== "undefined" && typeof performance.now === "function") {
+        return performance.now();
+      }
+
+      return Number.isFinite(this.lastUpdateTime) ? this.lastUpdateTime : 0;
+    }
+
+    requestJump(timeMs = this.getCurrentTimeMs()) {
+      this.jumpQueued = true;
+      this.jumpQueuedAt = Number.isFinite(timeMs) ? timeMs : this.getCurrentTimeMs();
+    }
+
+    clearJumpRequest() {
+      this.jumpQueued = false;
+      this.jumpQueuedAt = 0;
+    }
+
+    hasBufferedJump(timeMs = this.getCurrentTimeMs()) {
+      if (!this.jumpQueued) {
+        return false;
+      }
+
+      return timeMs - this.jumpQueuedAt <= this.jumpBufferMs;
+    }
+
+    expireJumpRequest(timeMs = this.getCurrentTimeMs()) {
+      if (this.jumpQueued && !this.hasBufferedJump(timeMs)) {
+        this.clearJumpRequest();
+      }
+    }
+
+    isWithinCoyoteTime(timeMs = this.getCurrentTimeMs()) {
+      return timeMs - this.lastGroundedTime <= this.coyoteMs;
+    }
+
+    getInputContext(timeMs = this.getCurrentTimeMs()) {
+      return {
+        spacePressed: this.frameHadJumpPress || this.hasBufferedJump(timeMs),
+        playerGrounded: this.player.grounded || this.isWithinCoyoteTime(timeMs)
+      };
+    }
+
+    tryRunBufferedJump(settings, timeMs = this.getCurrentTimeMs()) {
+      if (!this.programFeatures.player || !this.hasBufferedJump(timeMs)) {
+        return false;
+      }
+
+      const allowCoyoteJump = !this.player.grounded && this.isWithinCoyoteTime(timeMs);
+      const playerGrounded = this.player.grounded || allowCoyoteJump;
+      if (!playerGrounded || !this.shouldRunAction("jump", { spacePressed: true, playerGrounded })) {
+        return false;
+      }
+
+      const didJump = this.player.tryJump(settings.jumpForce, { allowAirborne: allowCoyoteJump });
+      if (didJump) {
+        this.clearJumpRequest();
+      }
+
+      return didJump;
     }
 
     getRuntimeSettings() {
@@ -301,24 +439,11 @@
     }
 
     shouldRunAction(actionId, context = {}) {
-      if (!this.programFeatures.hasLoop) {
+      if (!this.programFeatures.hasLoop || !this.programFeatures.loopSet.has(actionId)) {
         return false;
       }
 
-      const actionIndex = this.programFeatures.loopBlocks.indexOf(actionId);
-      if (actionIndex === -1) {
-        return false;
-      }
-
-      const conditions = [];
-      for (let index = actionIndex - 1; index >= 0; index -= 1) {
-        const blockId = this.programFeatures.loopBlocks[index];
-        if (!GameScene.isConditionBlock(blockId)) {
-          break;
-        }
-        conditions.unshift(blockId);
-      }
-
+      const conditions = this.programFeatures.actionConditions[actionId] || [];
       return conditions.every((conditionId) => this.conditionPasses(conditionId, context));
     }
 
@@ -343,7 +468,7 @@
         if (this.ended && !event.repeat) {
           this.restartQueued = true;
         } else if (!event.repeat) {
-          this.jumpQueued = true;
+          this.requestJump(this.getCurrentTimeMs());
         }
         return;
       }
@@ -417,8 +542,46 @@
       return Boolean(target.closest("input, textarea, select, [contenteditable='true'], [contenteditable='']"));
     }
 
+    beginFrameCache() {
+      this.frameScreenObjects = null;
+      this.frameDecorations = null;
+      this.frameScreenObjectsScrollX = null;
+      this.frameDecorationsScrollX = null;
+    }
+
+    invalidateFrameCache() {
+      this.frameScreenObjects = null;
+      this.frameDecorations = null;
+      this.frameScreenObjectsScrollX = null;
+      this.frameDecorationsScrollX = null;
+    }
+
+    getFrameScreenObjects() {
+      if (!this.frameScreenObjects || this.frameScreenObjectsScrollX !== this.scrollX) {
+        this.frameScreenObjects = this.level.getScreenObjects(this.scrollX, this.groundY, {
+          viewportWidth: this.worldWidth,
+          margin: this.tileSize * 5
+        });
+        this.frameScreenObjectsScrollX = this.scrollX;
+      }
+
+      return this.frameScreenObjects;
+    }
+
+    getFrameDecorations() {
+      if (!this.frameDecorations || this.frameDecorationsScrollX !== this.scrollX) {
+        this.frameDecorations = this.level.getScreenDecorations(this.scrollX, this.groundY, {
+          viewportWidth: this.worldWidth,
+          margin: this.tileSize * 8
+        });
+        this.frameDecorationsScrollX = this.scrollX;
+      }
+
+      return this.frameDecorations;
+    }
+
     checkCollisions(inputContext = {}) {
-      const screenObjects = this.level.getScreenObjects(this.scrollX, this.groundY);
+      const screenObjects = this.getFrameScreenObjects();
       const playerBounds = this.player.getBounds();
       const finish = this.programFeatures.player && this.programFeatures.finish
         ? window.TechnoDash.CollisionManager.findFinishCollision(playerBounds, screenObjects)
@@ -453,7 +616,7 @@
 
       const finish = window.TechnoDash.CollisionManager.findFinishCollision(
         this.player.getBounds(),
-        this.level.getScreenObjects(this.scrollX, this.groundY)
+        this.getFrameScreenObjects()
       );
       this.reachedFinish = Boolean(finish);
       if (!finish) {
@@ -475,10 +638,10 @@
 
     resolvePlatformCollisions(previousPlayerBounds) {
       if (!this.programFeatures.obstacles) {
-        return;
+        return false;
       }
 
-      const screenObjects = this.level.getScreenObjects(this.scrollX, this.groundY);
+      const screenObjects = this.getFrameScreenObjects();
       const platform = window.TechnoDash.CollisionManager.findPlatformLanding(
         this.player.getBounds(),
         previousPlayerBounds,
@@ -488,7 +651,10 @@
 
       if (platform) {
         this.player.landOn(platform.top);
+        return true;
       }
+
+      return false;
     }
 
     resolveSolidBlockSideCollisions(previousScrollX) {
@@ -496,7 +662,7 @@
         return false;
       }
 
-      const screenObjects = this.level.getScreenObjects(this.scrollX, this.groundY);
+      const screenObjects = this.getFrameScreenObjects();
       const solidBlock = window.TechnoDash.CollisionManager.findSolidBlockSideCollision(
         this.player.getBounds(),
         screenObjects
@@ -513,6 +679,7 @@
 
       // Geometry Dash rule: landing on top is safe, being blocked from the side ends the run.
       this.scrollX = Math.max(previousScrollX, this.scrollX - penetration - 0.5);
+      this.invalidateFrameCache();
       return true;
     }
 
@@ -520,31 +687,51 @@
       this.running = false;
       this.ended = true;
       this.status = status;
-      this.publishState();
+      this.publishState({ force: true });
     }
 
     renderWorld() {
-      if (!this.backgroundGraphics || !this.levelGraphics) {
+      if (!this.backgroundGraphics || !this.gridGraphics || !this.levelGraphics) {
         return;
       }
 
-      const backgroundGraphics = this.backgroundGraphics;
+      const gridGraphics = this.gridGraphics;
       const graphics = this.levelGraphics;
       const settings = this.getRuntimeSettings();
-      backgroundGraphics.clear();
+      this.renderStaticWorld(settings);
+      gridGraphics.clear();
       graphics.clear();
-      backgroundGraphics.fillStyle(window.TechnoDash.Level.hexToNumber(settings.backgroundColor, 0x071322), 1);
-      backgroundGraphics.fillRect(0, 0, this.worldWidth, this.worldHeight);
 
       if (this.programFeatures.background) {
-        this.drawBackgroundGrid(backgroundGraphics);
-      }
-      if (this.programFeatures.ground) {
-        this.drawGround(backgroundGraphics);
+        this.drawBackgroundGrid(gridGraphics);
       }
       this.renderDecorations();
       this.drawLevelObjects(graphics);
       this.syncProgramVisuals();
+    }
+
+    renderStaticWorld(settings) {
+      const signature = [
+        settings.backgroundColor,
+        this.programFeatures.ground,
+        this.worldWidth,
+        this.worldHeight,
+        this.groundY
+      ].join("|");
+      if (!this.staticWorldDirty && this.staticWorldSignature === signature) {
+        return;
+      }
+
+      const backgroundGraphics = this.backgroundGraphics;
+      backgroundGraphics.clear();
+      backgroundGraphics.fillStyle(window.TechnoDash.Level.hexToNumber(settings.backgroundColor, 0x071322), 1);
+      backgroundGraphics.fillRect(0, 0, this.worldWidth, this.worldHeight);
+      if (this.programFeatures.ground) {
+        this.drawGround(backgroundGraphics);
+      }
+
+      this.staticWorldDirty = false;
+      this.staticWorldSignature = signature;
     }
 
     renderDecorations() {
@@ -558,7 +745,7 @@
       }
 
       const visibleIds = new Set();
-      const decorations = this.level.getScreenDecorations(this.scrollX, this.groundY);
+      const decorations = this.getFrameDecorations();
       decorations.forEach((decoration) => {
         const key = GameScene.getDecorationTextureKey(decoration.type);
         const isNearScreen = decoration.right > -160 && decoration.left < this.worldWidth + 160;
@@ -609,7 +796,7 @@
     }
 
     drawLevelObjects(graphics) {
-      const screenObjects = this.level.getScreenObjects(this.scrollX, this.groundY);
+      const screenObjects = this.getFrameScreenObjects();
 
       screenObjects.forEach((object) => {
         if (object.type === "finish" && !this.programFeatures.finish) {
@@ -679,20 +866,45 @@
       graphics.strokeRect(object.left, object.top, object.width, object.height);
     }
 
-    publishState() {
-      if (typeof this.uiCallbacks.onStats === "function") {
-        this.uiCallbacks.onStats({
-          status: this.status,
-          distance: this.distance,
-          score: this.score,
-          ended: this.ended,
-          showDistance: this.hasLoopBlock("showDistance"),
-          showScore: this.hasLoopBlock("showScore"),
-          reachedFinish: this.reachedFinish,
-          grounded: this.player ? this.player.grounded : true,
-          playerY: this.player ? Math.round(this.player.y) : 0
-        });
+    publishState(options = {}) {
+      if (typeof this.uiCallbacks.onStats !== "function") {
+        return;
       }
+
+      const stats = {
+        status: this.status,
+        distance: this.distance,
+        score: this.score,
+        ended: this.ended,
+        showDistance: this.hasLoopBlock("showDistance"),
+        showScore: this.hasLoopBlock("showScore"),
+        reachedFinish: this.reachedFinish,
+        grounded: this.player ? this.player.grounded : true,
+        playerY: this.player ? Math.round(this.player.y) : 0
+      };
+      const timeMs = Number.isFinite(options.time) ? options.time : this.getCurrentTimeMs();
+      const force = Boolean(options.force) || this.shouldForceStatsPublish(stats);
+      if (!force && timeMs - this.lastStatsPublishTime < this.statsPublishIntervalMs) {
+        return;
+      }
+
+      this.lastStatsPublishTime = timeMs;
+      this.lastPublishedStats = stats;
+      this.uiCallbacks.onStats(stats);
+    }
+
+    shouldForceStatsPublish(stats) {
+      const previous = this.lastPublishedStats;
+      if (!previous) {
+        return true;
+      }
+
+      return previous.status !== stats.status
+        || previous.ended !== stats.ended
+        || previous.reachedFinish !== stats.reachedFinish
+        || previous.grounded !== stats.grounded
+        || previous.showDistance !== stats.showDistance
+        || previous.showScore !== stats.showScore;
     }
   }
 

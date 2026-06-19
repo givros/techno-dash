@@ -33,20 +33,53 @@
         return null;
       }
 
-      return screenObjects
-        .filter((object) => CollisionManager.isLandingSurface(object))
-        .filter((object) => playerBounds.right > object.left + 4 && playerBounds.left < object.right - 4)
-        .filter((object) => previousBounds.bottom <= object.top + 8 && playerBounds.bottom >= object.top)
-        .sort((a, b) => a.top - b.top)[0] || null;
+      let landing = null;
+      screenObjects.forEach((object) => {
+        if (!CollisionManager.isLandingSurface(object)) {
+          return;
+        }
+
+        if (playerBounds.right <= object.left + 4 || playerBounds.left >= object.right - 4) {
+          return;
+        }
+
+        if (previousBounds.bottom > object.top + 8 || playerBounds.bottom < object.top) {
+          return;
+        }
+
+        if (!landing || object.top < landing.top) {
+          landing = object;
+        }
+      });
+
+      return landing;
     }
 
     static findSolidBlockSideCollision(playerBounds, screenObjects) {
-      return screenObjects
-        .filter((object) => CollisionManager.isSolidBlock(object))
-        .filter((object) => CollisionManager.rectsOverlap(playerBounds, object))
-        .filter((object) => playerBounds.bottom > object.top + 8)
-        .filter((object) => playerBounds.left < object.left && playerBounds.right > object.left)
-        .sort((a, b) => a.left - b.left)[0] || null;
+      let solidBlock = null;
+      screenObjects.forEach((object) => {
+        if (!CollisionManager.isSolidBlock(object)) {
+          return;
+        }
+
+        if (!CollisionManager.rectsOverlap(playerBounds, object)) {
+          return;
+        }
+
+        if (playerBounds.bottom <= object.top + 8) {
+          return;
+        }
+
+        if (playerBounds.left >= object.left || playerBounds.right <= object.left) {
+          return;
+        }
+
+        if (!solidBlock || object.left < solidBlock.left) {
+          solidBlock = object;
+        }
+      });
+
+      return solidBlock;
     }
 
     static isSafeLandingSurface(object) {

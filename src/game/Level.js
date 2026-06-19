@@ -4,6 +4,8 @@
   class Level {
     constructor(levelData) {
       this.data = Level.normalize(levelData);
+      this.obstaclesByX = [...this.data.obstacles].sort((a, b) => a.x - b.x);
+      this.decorationsByX = [...this.data.decorations].sort((a, b) => a.x - b.x);
     }
 
     static getDefaultData() {
@@ -345,8 +347,41 @@
       return this.data.obstacles.find((obstacle) => obstacle.type === "finish");
     }
 
-    getScreenObjects(scrollX, groundY) {
-      return this.data.obstacles.map((obstacle) => {
+    getVisibleElements(elements, scrollX, viewportWidth, margin = 96) {
+      const safeViewportWidth = Number(viewportWidth);
+      if (!Number.isFinite(safeViewportWidth) || safeViewportWidth <= 0) {
+        return elements;
+      }
+
+      const safeScrollX = Number(scrollX) || 0;
+      const safeMargin = Math.max(0, Number(margin) || 0);
+      const minX = safeScrollX - safeMargin;
+      const maxX = safeScrollX + safeViewportWidth + safeMargin;
+      const visible = [];
+
+      for (const element of elements) {
+        const halfWidth = Number(element.width || Level.getTileSize()) / 2;
+        if (element.x + halfWidth < minX) {
+          continue;
+        }
+
+        if (element.x - halfWidth > maxX) {
+          break;
+        }
+
+        visible.push(element);
+      }
+
+      return visible;
+    }
+
+    getScreenObjects(scrollX, groundY, options = {}) {
+      return this.getVisibleElements(
+        this.obstaclesByX,
+        scrollX,
+        options.viewportWidth,
+        options.margin
+      ).map((obstacle) => {
         const screenX = obstacle.x - scrollX;
         const bottom = groundY - obstacle.y;
         return {
@@ -361,8 +396,13 @@
       });
     }
 
-    getScreenDecorations(scrollX, groundY) {
-      return this.data.decorations.map((decoration) => {
+    getScreenDecorations(scrollX, groundY, options = {}) {
+      return this.getVisibleElements(
+        this.decorationsByX,
+        scrollX,
+        options.viewportWidth,
+        options.margin
+      ).map((decoration) => {
         const screenX = decoration.x - scrollX;
         const bottom = groundY - decoration.y;
         return {
