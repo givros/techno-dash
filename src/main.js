@@ -335,7 +335,7 @@
     const getGamePerformanceProfile = () => {
       const mobilePerformance = isMobileGamePerformanceMode();
       const logicalViewport = window.TechnoDash.Level.getViewportSize();
-      const renderScale = mobilePerformance ? 0.5 : 1;
+      const renderScale = 1;
       return {
         mobilePerformance,
         logicalViewport,
