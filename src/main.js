@@ -351,7 +351,8 @@
             gridStep: 1,
             renderScale,
             logicalWidth: logicalViewport.width,
-            logicalHeight: logicalViewport.height
+            logicalHeight: logicalViewport.height,
+            useDecorationAtlas: true
           }
           : {
             lowDetail: false,
@@ -360,7 +361,8 @@
             gridStep: 1,
             renderScale,
             logicalWidth: logicalViewport.width,
-            logicalHeight: logicalViewport.height
+            logicalHeight: logicalViewport.height,
+            useDecorationAtlas: false
           }
       };
     };

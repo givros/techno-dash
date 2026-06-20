@@ -127,7 +127,8 @@
           ? Math.min(1, Math.max(0.25, Number(profile.renderScale)))
           : 1,
         logicalWidth: Number.isFinite(Number(profile.logicalWidth)) ? Number(profile.logicalWidth) : 0,
-        logicalHeight: Number.isFinite(Number(profile.logicalHeight)) ? Number(profile.logicalHeight) : 0
+        logicalHeight: Number.isFinite(Number(profile.logicalHeight)) ? Number(profile.logicalHeight) : 0,
+        useDecorationAtlas: Boolean(profile.useDecorationAtlas)
       };
     }
 
@@ -135,6 +136,14 @@
 
     static getDecorationTextureKey(type) {
       return `decor-${type}`;
+    }
+
+    static getDecorationAtlasKey(theme) {
+      return `decor-atlas-${theme}`;
+    }
+
+    static getDecorationAtlasPath(theme, extension) {
+      return `assets/decor-atlas/decor-${theme}.${extension}`;
     }
 
     create() {
@@ -247,6 +256,18 @@
       return [...types];
     }
 
+    getDecorationThemesForLevel(levelData = this.levelData) {
+      const themes = new Set();
+      this.getDecorationTypesForLevel(levelData).forEach((type) => {
+        const decoration = window.TechnoDash.Level.getDecorationForType(type);
+        if (decoration && decoration.theme) {
+          themes.add(decoration.theme);
+        }
+      });
+
+      return [...themes];
+    }
+
     loadMissingDecorationTextures(levelData, onReady) {
       const ready = typeof onReady === "function" ? onReady : () => {};
       if (!this.load || !this.performanceProfile.renderDecorations) {
@@ -259,9 +280,7 @@
         return;
       }
 
-      const missingDecorations = this.getDecorationTypesForLevel(levelData)
-        .map((type) => window.TechnoDash.Level.getDecorationForType(type))
-        .filter((decoration) => decoration && !this.textures.exists(GameScene.getDecorationTextureKey(decoration.type)));
+      const missingDecorations = this.getMissingDecorationAssets(levelData);
 
       if (!missingDecorations.length) {
         ready();
@@ -280,10 +299,37 @@
 
       this.load.once("complete", onComplete);
       this.load.on("loaderror", onError);
-      missingDecorations.forEach((decoration) => {
-        this.load.image(GameScene.getDecorationTextureKey(decoration.type), `assets/decor/${decoration.file}`);
+      missingDecorations.forEach((asset) => {
+        if (asset.kind === "atlas") {
+          this.load.atlas(asset.key, asset.imagePath, asset.dataPath);
+          return;
+        }
+
+        this.load.image(asset.key, asset.imagePath);
       });
       this.load.start();
+    }
+
+    getMissingDecorationAssets(levelData) {
+      if (this.performanceProfile.useDecorationAtlas) {
+        return this.getDecorationThemesForLevel(levelData)
+          .map((theme) => ({
+            kind: "atlas",
+            key: GameScene.getDecorationAtlasKey(theme),
+            imagePath: GameScene.getDecorationAtlasPath(theme, "png"),
+            dataPath: GameScene.getDecorationAtlasPath(theme, "json")
+          }))
+          .filter((asset) => !this.textures.exists(asset.key));
+      }
+
+      return this.getDecorationTypesForLevel(levelData)
+        .map((type) => window.TechnoDash.Level.getDecorationForType(type))
+        .filter((decoration) => decoration && !this.textures.exists(GameScene.getDecorationTextureKey(decoration.type)))
+        .map((decoration) => ({
+          kind: "image",
+          key: GameScene.getDecorationTextureKey(decoration.type),
+          imagePath: `assets/decor/${decoration.file}`
+        }));
     }
 
     play() {
@@ -848,20 +894,20 @@
           break;
         }
 
-        const key = GameScene.getDecorationTextureKey(decoration.type);
+        const texture = this.getDecorationTextureRef(decoration.type);
         const isNearScreen = decoration.right > -160 && decoration.left < this.worldWidth + 160;
-        if (!isNearScreen || !this.textures.exists(key)) {
+        if (!texture || !isNearScreen || !this.textures.exists(texture.key)) {
           continue;
         }
 
         let sprite = this.decorSprites.get(decoration.id);
         if (!sprite) {
-          sprite = this.add.image(decoration.screenX, decoration.bottom, key);
+          sprite = this.add.image(decoration.screenX, decoration.bottom, texture.key, texture.frame);
           sprite.setOrigin(0.5, 1);
           sprite.setDepth(1);
           this.decorSprites.set(decoration.id, sprite);
-        } else if (sprite.texture.key !== key) {
-          sprite.setTexture(key);
+        } else if (this.shouldUpdateDecorationTexture(sprite, texture)) {
+          sprite.setTexture(texture.key, texture.frame);
         }
 
         sprite.setPosition(decoration.screenX, decoration.bottom);
@@ -876,6 +922,37 @@
           this.decorSprites.delete(id);
         }
       });
+    }
+
+    getDecorationTextureRef(type) {
+      const decoration = window.TechnoDash.Level.getDecorationForType(type);
+      if (!decoration) {
+        return null;
+      }
+
+      if (this.performanceProfile.useDecorationAtlas && decoration.theme) {
+        return {
+          key: GameScene.getDecorationAtlasKey(decoration.theme),
+          frame: decoration.type
+        };
+      }
+
+      return {
+        key: GameScene.getDecorationTextureKey(decoration.type),
+        frame: null
+      };
+    }
+
+    shouldUpdateDecorationTexture(sprite, texture) {
+      if (sprite.texture.key !== texture.key) {
+        return true;
+      }
+
+      if (!texture.frame) {
+        return false;
+      }
+
+      return !sprite.frame || sprite.frame.name !== texture.frame;
     }
 
     clearDecorationSprites() {
