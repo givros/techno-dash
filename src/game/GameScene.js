@@ -34,6 +34,8 @@
       this.lastStatsPublishTime = 0;
       this.statsPublishIntervalMs = 80;
       this.lastPublishedStats = null;
+      this.performanceProfile = GameScene.createPerformanceProfile();
+      this.levelLoadToken = 0;
       this.keyState = {
         space: false,
         enter: false,
@@ -109,22 +111,39 @@
       return ["spacePressed", "playerGrounded", "hitObstacle", "reachFinish"].includes(blockId);
     }
 
-    preload() {
-      window.TechnoDash.Level.getDecorationTypes().forEach((decoration) => {
-        this.load.image(GameScene.getDecorationTextureKey(decoration.type), `assets/decor/${decoration.file}`);
-      });
+    static createPerformanceProfile(profile = {}) {
+      const lowDetail = Boolean(profile.lowDetail);
+      return {
+        lowDetail,
+        showGrid: Object.prototype.hasOwnProperty.call(profile, "showGrid") ? Boolean(profile.showGrid) : true,
+        renderDecorations: Object.prototype.hasOwnProperty.call(profile, "renderDecorations") ? Boolean(profile.renderDecorations) : true,
+        maxVisibleDecorations: Number.isFinite(Number(profile.maxVisibleDecorations))
+          ? Math.max(0, Math.floor(Number(profile.maxVisibleDecorations)))
+          : Infinity,
+        gridStep: Number.isFinite(Number(profile.gridStep))
+          ? Math.max(1, Math.floor(Number(profile.gridStep)))
+          : 1,
+        renderScale: Number.isFinite(Number(profile.renderScale))
+          ? Math.min(1, Math.max(0.25, Number(profile.renderScale)))
+          : 1,
+        logicalWidth: Number.isFinite(Number(profile.logicalWidth)) ? Number(profile.logicalWidth) : 0,
+        logicalHeight: Number.isFinite(Number(profile.logicalHeight)) ? Number(profile.logicalHeight) : 0
+      };
     }
+
+    preload() {}
 
     static getDecorationTextureKey(type) {
       return `decor-${type}`;
     }
 
     create() {
-      this.worldWidth = this.scale.width;
-      this.worldHeight = this.scale.height;
+      this.worldWidth = this.performanceProfile.logicalWidth || this.scale.width;
+      this.worldHeight = this.performanceProfile.logicalHeight || this.scale.height;
       this.tileSize = window.TechnoDash.Level.getTileSize();
       this.groundY = this.worldHeight - this.tileSize;
       this.playerX = this.tileSize * 3 + this.tileSize / 2;
+      this.cameras.main.setZoom(this.performanceProfile.renderScale);
       this.level = new window.TechnoDash.Level(this.levelData);
       this.backgroundGraphics = this.add.graphics();
       this.backgroundGraphics.setDepth(0);
@@ -141,16 +160,29 @@
       this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
         window.removeEventListener("keydown", this.handleGlobalKeydown);
         window.removeEventListener("keyup", this.handleGlobalKeyup);
+        this.clearDecorationSprites();
       });
 
       this.created = true;
-      this.reset(this.pendingPlay);
-      this.pendingPlay = false;
+      const levelLoadToken = this.levelLoadToken;
+      this.loadMissingDecorationTextures(this.levelData, () => {
+        if (levelLoadToken !== this.levelLoadToken) {
+          return;
+        }
+
+        this.reset(this.pendingPlay);
+        this.pendingPlay = false;
+      });
     }
 
     setCallbacks(callbacks) {
       this.uiCallbacks = callbacks || {};
       this.publishState({ force: true });
+    }
+
+    setPerformanceProfile(profile = {}) {
+      this.performanceProfile = GameScene.createPerformanceProfile(profile);
+      this.staticWorldDirty = true;
     }
 
     setProgramState(programState) {
@@ -180,6 +212,8 @@
     loadLevel(levelData, options = {}) {
       this.levelData = window.TechnoDash.Level.normalize(levelData);
       this.staticWorldDirty = true;
+      this.levelLoadToken += 1;
+      const levelLoadToken = this.levelLoadToken;
 
       if (!this.created) {
         this.pendingPlay = Boolean(options.play);
@@ -188,7 +222,68 @@
 
       this.level = new window.TechnoDash.Level(this.levelData);
       this.invalidateFrameCache();
-      this.reset(Boolean(options.play));
+      this.loadMissingDecorationTextures(this.levelData, () => {
+        if (levelLoadToken !== this.levelLoadToken) {
+          return;
+        }
+
+        this.reset(Boolean(options.play));
+      });
+    }
+
+    getDecorationTypesForLevel(levelData = this.levelData) {
+      if (!this.performanceProfile.renderDecorations) {
+        return [];
+      }
+
+      const data = window.TechnoDash.Level.normalize(levelData);
+      const types = new Set();
+      data.decorations.forEach((decoration) => {
+        if (decoration && window.TechnoDash.Level.getDecorationForType(decoration.type)) {
+          types.add(decoration.type);
+        }
+      });
+
+      return [...types];
+    }
+
+    loadMissingDecorationTextures(levelData, onReady) {
+      const ready = typeof onReady === "function" ? onReady : () => {};
+      if (!this.load || !this.performanceProfile.renderDecorations) {
+        ready();
+        return;
+      }
+
+      if (typeof this.load.isLoading === "function" && this.load.isLoading()) {
+        this.load.once("complete", () => this.loadMissingDecorationTextures(levelData, ready));
+        return;
+      }
+
+      const missingDecorations = this.getDecorationTypesForLevel(levelData)
+        .map((type) => window.TechnoDash.Level.getDecorationForType(type))
+        .filter((decoration) => decoration && !this.textures.exists(GameScene.getDecorationTextureKey(decoration.type)));
+
+      if (!missingDecorations.length) {
+        ready();
+        return;
+      }
+
+      const onError = (file) => {
+        const src = file && file.src ? file.src : file;
+        console.warn("Decoration texture failed to load", src);
+      };
+
+      const onComplete = () => {
+        this.load.off("loaderror", onError);
+        ready();
+      };
+
+      this.load.once("complete", onComplete);
+      this.load.on("loaderror", onError);
+      missingDecorations.forEach((decoration) => {
+        this.load.image(GameScene.getDecorationTextureKey(decoration.type), `assets/decor/${decoration.file}`);
+      });
+      this.load.start();
     }
 
     play() {
@@ -215,6 +310,7 @@
     reset(shouldPlay) {
       this.scrollX = 0;
       this.invalidateFrameCache();
+      this.clearDecorationSprites();
       this.distance = 0;
       this.score = 0;
       this.reachedFinish = false;
@@ -702,7 +798,7 @@
       gridGraphics.clear();
       graphics.clear();
 
-      if (this.programFeatures.background) {
+      if (this.programFeatures.background && this.performanceProfile.showGrid) {
         this.drawBackgroundGrid(gridGraphics);
       }
       this.renderDecorations();
@@ -739,18 +835,23 @@
         return;
       }
 
-      if (!this.programFeatures.decorations) {
-        this.decorSprites.forEach((sprite) => sprite.setVisible(false));
+      if (!this.programFeatures.decorations || !this.performanceProfile.renderDecorations) {
+        this.clearDecorationSprites();
         return;
       }
 
       const visibleIds = new Set();
       const decorations = this.getFrameDecorations();
-      decorations.forEach((decoration) => {
+      const maxDecorations = this.performanceProfile.maxVisibleDecorations;
+      for (const decoration of decorations) {
+        if (visibleIds.size >= maxDecorations) {
+          break;
+        }
+
         const key = GameScene.getDecorationTextureKey(decoration.type);
         const isNearScreen = decoration.right > -160 && decoration.left < this.worldWidth + 160;
         if (!isNearScreen || !this.textures.exists(key)) {
-          return;
+          continue;
         }
 
         let sprite = this.decorSprites.get(decoration.id);
@@ -767,23 +868,35 @@
         sprite.setDisplaySize(decoration.width, decoration.height);
         sprite.setVisible(true);
         visibleIds.add(decoration.id);
-      });
+      }
 
       this.decorSprites.forEach((sprite, id) => {
         if (!visibleIds.has(id)) {
-          sprite.setVisible(false);
+          sprite.destroy();
+          this.decorSprites.delete(id);
         }
       });
+    }
+
+    clearDecorationSprites() {
+      if (!this.decorSprites) {
+        return;
+      }
+
+      this.decorSprites.forEach((sprite) => sprite.destroy());
+      this.decorSprites.clear();
     }
 
     drawBackgroundGrid(graphics) {
       graphics.lineStyle(1, 0x253045, 0.75);
       const tileSize = this.tileSize || window.TechnoDash.Level.getTileSize();
-      const offset = Math.floor(this.scrollX % tileSize);
-      for (let x = -offset; x < this.worldWidth + tileSize; x += tileSize) {
+      const gridStep = Math.max(1, this.performanceProfile.gridStep);
+      const gridSize = tileSize * gridStep;
+      const offset = Math.floor(this.scrollX % gridSize);
+      for (let x = -offset; x < this.worldWidth + gridSize; x += gridSize) {
         graphics.lineBetween(x, 0, x, this.worldHeight);
       }
-      for (let y = this.groundY % tileSize; y < this.groundY; y += tileSize) {
+      for (let y = this.groundY % gridSize; y < this.groundY; y += gridSize) {
         graphics.lineBetween(0, y, this.worldWidth, y);
       }
     }
@@ -814,8 +927,10 @@
         if (object.type === "triangle") {
           graphics.fillStyle(0xd9433e, 1);
           graphics.fillTriangle(object.left, object.bottom, object.screenX, object.top, object.right, object.bottom);
-          graphics.lineStyle(2, 0xffffff, 0.7);
-          graphics.strokeTriangle(object.left, object.bottom, object.screenX, object.top, object.right, object.bottom);
+          if (!this.performanceProfile.lowDetail) {
+            graphics.lineStyle(2, 0xffffff, 0.7);
+            graphics.strokeTriangle(object.left, object.bottom, object.screenX, object.top, object.right, object.bottom);
+          }
           return;
         }
 
@@ -825,8 +940,10 @@
           graphics.fillRect(object.left, object.top, object.width, object.height);
           graphics.fillStyle(window.TechnoDash.Level.hexToNumber(colors.danger, 0xc7352f), 1);
           graphics.fillRect(object.left, object.top + 6, Math.min(12, object.width * 0.24), object.height - 12);
-          graphics.lineStyle(2, window.TechnoDash.Level.hexToNumber(colors.stroke, 0x4d3500), 0.8);
-          graphics.strokeRect(object.left, object.top, object.width, object.height);
+          if (!this.performanceProfile.lowDetail) {
+            graphics.lineStyle(2, window.TechnoDash.Level.hexToNumber(colors.stroke, 0x4d3500), 0.8);
+            graphics.strokeRect(object.left, object.top, object.width, object.height);
+          }
           return;
         }
 

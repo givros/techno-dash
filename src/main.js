@@ -330,6 +330,41 @@
 
     const isMobileCommunityHomeLayout = () => isMobileViewport() && hasCoarsePointer();
 
+    const isMobileGamePerformanceMode = () => isMobileViewport() && hasCoarsePointer();
+
+    const getGamePerformanceProfile = () => {
+      const mobilePerformance = isMobileGamePerformanceMode();
+      const logicalViewport = window.TechnoDash.Level.getViewportSize();
+      const renderScale = mobilePerformance ? 0.5 : 1;
+      return {
+        mobilePerformance,
+        logicalViewport,
+        renderViewport: {
+          width: Math.round(logicalViewport.width * renderScale),
+          height: Math.round(logicalViewport.height * renderScale)
+        },
+        scene: mobilePerformance
+          ? {
+            lowDetail: false,
+            showGrid: true,
+            renderDecorations: true,
+            gridStep: 1,
+            renderScale,
+            logicalWidth: logicalViewport.width,
+            logicalHeight: logicalViewport.height
+          }
+          : {
+            lowDetail: false,
+            showGrid: true,
+            renderDecorations: true,
+            gridStep: 1,
+            renderScale,
+            logicalWidth: logicalViewport.width,
+            logicalHeight: logicalViewport.height
+          }
+      };
+    };
+
     const showMobileEditorLockedMessage = () => {
       const message = "Editor is temporarily unavailable on mobile.";
       setCommunityStatus(message);
@@ -1162,10 +1197,28 @@
       }
     };
 
-    const showHome = () => {
+    const unloadGame = () => {
       if (gameScene) {
         gameScene.stop();
+        gameScene.setCallbacks(null);
       }
+
+      if (game) {
+        game.destroy(true);
+      }
+
+      game = null;
+      gameScene = null;
+      if (elements.gameFrame) {
+        const gameContainer = elements.gameFrame.querySelector("#game-container");
+        if (gameContainer) {
+          gameContainer.innerHTML = "";
+        }
+      }
+    };
+
+    const showHome = () => {
+      unloadGame();
       document.body.classList.add("is-community-home");
       window.scrollTo(0, 0);
       activeCommunityLevel = null;
@@ -1560,17 +1613,18 @@
         return;
       }
 
-      const gameViewport = window.TechnoDash.Level.getViewportSize();
+      const performanceProfile = getGamePerformanceProfile();
 
       gameScene = new window.TechnoDash.GameScene();
+      gameScene.setPerformanceProfile(performanceProfile.scene);
       gameScene.setCallbacks({ onStats: updateGameStats });
       gameScene.setProgramState(makerProgramState);
       gameScene.loadLevel(levelData, { play: false });
       game = new Phaser.Game({
         type: Phaser.AUTO,
         parent: "game-container",
-        width: gameViewport.width,
-        height: gameViewport.height,
+        width: performanceProfile.renderViewport.width,
+        height: performanceProfile.renderViewport.height,
         backgroundColor: levelData.settings.backgroundColor || "#071322",
         scene: [gameScene],
         fps: {
