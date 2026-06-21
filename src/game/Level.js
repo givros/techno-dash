@@ -16,7 +16,8 @@
           speed: 280,
           gravity: 1350,
           jumpForce: 560,
-          backgroundColor: "#071322"
+          backgroundColor: "#071322",
+          deathAnimation: "burst"
         },
         obstacles: [],
         decorations: []
@@ -30,7 +31,8 @@
         speed: Level.clampNumber(source.settings && source.settings.speed, 120, 520, defaults.settings.speed),
         gravity: Level.clampNumber(source.settings && source.settings.gravity, 600, 2400, defaults.settings.gravity),
         jumpForce: Level.clampNumber(source.settings && source.settings.jumpForce, 260, 900, defaults.settings.jumpForce),
-        backgroundColor: Level.normalizeHexColor(source.settings && source.settings.backgroundColor, defaults.settings.backgroundColor)
+        backgroundColor: Level.normalizeHexColor(source.settings && source.settings.backgroundColor, defaults.settings.backgroundColor),
+        deathAnimation: Level.normalizeDeathAnimation(source.settings && source.settings.deathAnimation)
       };
 
       const length = Level.snapLength(Level.clampNumber(source.length, 1216, 60000, defaults.length));
@@ -56,7 +58,8 @@
 
     static normalizeObstacle(obstacle, index, length) {
       const type = obstacle.type;
-      const dimensions = Level.getDimensionsForType(type);
+      const rotation = Level.normalizeRotation(obstacle.rotation, type);
+      const dimensions = Level.getDimensionsForType(type, rotation);
       const maxColumn = Level.getMaxColumnForWidth(length, dimensions.width);
       const sourceColumn = Level.getColumnFromX(
         Level.clampNumber(obstacle.x, dimensions.width / 2, length - dimensions.width / 2, 600),
@@ -73,7 +76,8 @@
         x: Level.getXForColumn(column, dimensions.width),
         y: Level.getYForRow(row),
         width: dimensions.width,
-        height: dimensions.height
+        height: dimensions.height,
+        rotation
       };
 
       const color = Level.normalizeObstacleColor(type, obstacle.color);
@@ -176,32 +180,205 @@
       return Level.clampInteger(row, 0, 999999, 0) * Level.getTileSize();
     }
 
-    static getDimensionsForType(type) {
+    static getBaseDimensionsForType(type) {
       const tileSize = Level.getTileSize();
-      if (type === "platform") {
+      if (["platform", "oneWayPlatform", "movingPlatform"].includes(type)) {
         return { width: tileSize * 2, height: tileSize };
+      }
+
+      if (["gravityUpPortal", "gravityDownPortal", "speedPortal"].includes(type)) {
+        return { width: tileSize, height: tileSize * 2 };
+      }
+
+      if (["gravityUpZone", "gravityDownZone", "slowZone", "fastZone"].includes(type)) {
+        return { width: tileSize * 2, height: tileSize * 2 };
+      }
+
+      if (type === "laser") {
+        return { width: tileSize, height: tileSize * 4 };
       }
 
       return { width: tileSize, height: tileSize };
     }
 
+    static getDimensionsForType(type, rotation = 0) {
+      const dimensions = Level.getBaseDimensionsForType(type);
+      const normalizedRotation = Level.normalizeRotation(rotation, type);
+      if (Level.hasDirectionalDimensions(type) && [90, 270].includes(normalizedRotation)) {
+        return {
+          width: dimensions.height,
+          height: dimensions.width
+        };
+      }
+
+      return dimensions;
+    }
+
     static getObstacleTypes() {
-      return ["triangle", "block", "platform", "solidBlock", "dirtBlock", "iceBlock", "grassBlock", "finish"];
+      return Level.getGameplayTools().map((tool) => tool.type);
+    }
+
+    static getGameplayToolGroups() {
+      return [
+        {
+          id: "structure",
+          label: "Structure",
+          tools: [
+            { type: "solidBlock", label: "Block", note: "safe" },
+            { type: "dirtBlock", label: "Dirt", note: "solid" },
+            { type: "iceBlock", label: "Ice", note: "solid" },
+            { type: "grassBlock", label: "Grass", note: "solid" },
+            { type: "slipperyBlock", label: "Slip", note: "slide" },
+            { type: "platform", label: "Platform", note: "2 tiles" },
+            { type: "oneWayPlatform", label: "One-way", note: "pass" },
+            { type: "movingPlatform", label: "Moving", note: "motion" },
+            { type: "finish", label: "Finish", note: "goal" }
+          ]
+        },
+        {
+          id: "danger",
+          label: "Danger",
+          tools: [
+            { type: "triangle", label: "Spike", note: "danger" },
+            { type: "animatedSpike", label: "Anim spike", note: "pulse" },
+            { type: "block", label: "Danger", note: "face" },
+            { type: "laser", label: "Laser", note: "timed" }
+          ]
+        },
+        {
+          id: "movement",
+          label: "Movement",
+          tools: [
+            { type: "gravitySwitch", label: "Gravity", note: "flip" },
+            { type: "gravityUpPortal", label: "Grav up", note: "portal" },
+            { type: "gravityDownPortal", label: "Grav down", note: "portal" },
+            { type: "gravityUpZone", label: "Zone up", note: "field" },
+            { type: "gravityDownZone", label: "Zone down", note: "field" },
+            { type: "speedPortal", label: "Speed", note: "portal" },
+            { type: "slowZone", label: "Slow", note: "zone" },
+            { type: "fastZone", label: "Fast", note: "zone" }
+          ]
+        },
+        {
+          id: "actions",
+          label: "Actions",
+          tools: [
+            { type: "jumpPad", label: "Jump pad", note: "auto" },
+            { type: "jumpOrb", label: "Jump orb", note: "tap" },
+            { type: "trampolineBlock", label: "Trampoline", note: "bounce" },
+            { type: "breakableBlock", label: "Break", note: "crack" }
+          ]
+        }
+      ];
+    }
+
+    static getGameplayTools() {
+      return Level.getGameplayToolGroups().flatMap((group) => group.tools);
+    }
+
+    static getGameplayTool(type) {
+      return Level.getGameplayTools().find((tool) => tool.type === type) || null;
     }
 
     static getSolidBlockTypes() {
-      return ["solidBlock", "dirtBlock", "iceBlock", "grassBlock"];
+      return ["solidBlock", "dirtBlock", "iceBlock", "grassBlock", "slipperyBlock", "breakableBlock"];
     }
 
     static isSolidBlockType(type) {
       return Level.getSolidBlockTypes().includes(type);
     }
 
+    static isGravitySwitchType(type) {
+      return type === "gravitySwitch";
+    }
+
+    static getRotatableObstacleTypes() {
+      return [
+        "triangle",
+        "animatedSpike",
+        "block",
+        "platform",
+        "oneWayPlatform",
+        "movingPlatform",
+        "solidBlock",
+        "dirtBlock",
+        "iceBlock",
+        "grassBlock",
+        "slipperyBlock",
+        "breakableBlock",
+        "trampolineBlock",
+        "gravitySwitch",
+        "gravityUpPortal",
+        "gravityDownPortal",
+        "speedPortal",
+        "laser"
+      ];
+    }
+
+    static isRotatableObstacleType(type) {
+      return Level.getRotatableObstacleTypes().includes(type);
+    }
+
+    static hasDirectionalDimensions(type) {
+      return ["platform", "oneWayPlatform", "movingPlatform", "gravityUpPortal", "gravityDownPortal", "speedPortal", "laser"].includes(type);
+    }
+
+    static normalizeRotation(value, type) {
+      if (!Level.isRotatableObstacleType(type)) {
+        return 0;
+      }
+
+      const normalized = ((Math.round((Number(value) || 0) / 90) * 90) % 360 + 360) % 360;
+      return [0, 90, 180, 270].includes(normalized) ? normalized : 0;
+    }
+
+    static getNextRotation(value, type) {
+      return (Level.normalizeRotation(value, type) + 90) % 360;
+    }
+
+    static getGravitySwitchDirection(currentDirection) {
+      return Number(currentDirection) === -1 ? 1 : -1;
+    }
+
+    static isHazardType(type) {
+      return ["triangle", "animatedSpike", "block", "laser"].includes(type);
+    }
+
+    static getPlatformTypes() {
+      return ["platform", "oneWayPlatform", "movingPlatform", "trampolineBlock"];
+    }
+
+    static isPlatformType(type) {
+      return Level.getPlatformTypes().includes(type);
+    }
+
+    static getModifierTypes() {
+      return [
+        "gravitySwitch",
+        "gravityUpPortal",
+        "gravityDownPortal",
+        "gravityUpZone",
+        "gravityDownZone",
+        "speedPortal",
+        "slowZone",
+        "fastZone",
+        "jumpPad",
+        "jumpOrb"
+      ];
+    }
+
+    static isModifierType(type) {
+      return Level.getModifierTypes().includes(type);
+    }
+
     static getMaterialBlockStyles() {
       return {
         dirtBlock: { name: "dirt", color: "#8b5a32" },
         iceBlock: { name: "ice", color: "#8fd8ff" },
-        grassBlock: { name: "grass", color: "#58c76d" }
+        grassBlock: { name: "grass", color: "#58c76d" },
+        slipperyBlock: { name: "slip", color: "#38d6ff", accent: "#d7f8ff", stroke: "#147c9c" },
+        breakableBlock: { name: "break", color: "#b77945", accent: "#f4c38a", stroke: "#6f3f1f" },
+        trampolineBlock: { name: "bounce", color: "#f97316", accent: "#fed7aa", stroke: "#c2410c" }
       };
     }
 
@@ -269,13 +446,21 @@
       return fallback;
     }
 
+    static normalizeDeathAnimation(value) {
+      const animation = String(value || "").trim();
+      return ["burst", "shatter", "fade"].includes(animation) ? animation : "burst";
+    }
+
     static getObstacleColorStyle(type, color) {
       if (Level.getMaterialBlockStyle(type)) {
         return Level.getMaterialBlockStyle(type);
       }
 
-      const normalizedColor = Level.normalizeObstacleColor(type, color);
-      const palette = Level.getColorPalettes()[type] || [];
+      const paletteType = ["oneWayPlatform", "movingPlatform"].includes(type)
+        ? "platform"
+        : type;
+      const normalizedColor = Level.normalizeObstacleColor(paletteType, color);
+      const palette = Level.getColorPalettes()[paletteType] || [];
       const preset = palette.find((item) => item.color === normalizedColor) || palette[0];
       if (!preset) {
         return null;

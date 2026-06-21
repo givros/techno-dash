@@ -5,16 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Dash Maker</title>
     <link rel="icon" href="favicon.ico">
-    <link rel="stylesheet" href="styles/main.css?v=maker-24">
+    <link rel="stylesheet" href="styles/main.css?v=maker-33">
     <script defer src="vendor/phaser/phaser.min.js?v=maker-3"></script>
     <script defer src="src/game/DecorCatalog.js?v=maker-2"></script>
-    <script defer src="src/game/Player.js?v=maker-4"></script>
-    <script defer src="src/game/Level.js?v=maker-8"></script>
-    <script defer src="src/game/CollisionManager.js?v=maker-5"></script>
-    <script defer src="src/game/GameScene.js?v=maker-19"></script>
-    <script defer src="src/editor/LevelEditor.js?v=maker-10"></script>
-    <script defer src="src/storage/SupabaseManager.js?v=maker-4"></script>
-    <script defer src="src/main.js?v=maker-38"></script>
+    <script defer src="src/game/Player.js?v=maker-7"></script>
+    <script defer src="src/game/Level.js?v=maker-12"></script>
+    <script defer src="src/game/CollisionManager.js?v=maker-8"></script>
+    <script defer src="src/game/GameScene.js?v=maker-26"></script>
+    <script defer src="src/editor/LevelEditor.js?v=maker-16"></script>
+    <script defer src="src/storage/SupabaseManager.js?v=maker-6"></script>
+    <script defer src="src/main.js?v=maker-45"></script>
   </head>
   <body>
     <div class="desktop-warning">
@@ -145,6 +145,7 @@
               <div class="palette-tabs" role="tablist" aria-label="Palette categories">
                 <button class="palette-tab is-active" id="gameplay-palette-tab" type="button" data-palette-tab="gameplay" role="tab" aria-selected="true">Gameplay</button>
                 <button class="palette-tab" id="decor-palette-tab" type="button" data-palette-tab="decor" role="tab" aria-selected="false">Decor</button>
+                <button class="palette-tab" id="background-palette-tab" type="button" data-palette-tab="background" role="tab" aria-selected="false">Background</button>
               </div>
 
               <div id="gameplay-palette-panel" class="palette-tab-panel is-active" role="tabpanel" aria-labelledby="gameplay-palette-tab">
@@ -179,6 +180,11 @@
                     <strong>Spike</strong>
                     <small>danger</small>
                   </button>
+                  <button class="palette-card tool-button" type="button" data-tool="gravitySwitch">
+                    <span class="palette-preview tool-swatch" data-type="gravitySwitch"></span>
+                    <strong>Gravity</strong>
+                    <small>flip</small>
+                  </button>
                   <button class="palette-card tool-button" type="button" data-tool="finish">
                     <span class="palette-preview tool-swatch" data-type="finish"></span>
                     <strong>Finish</strong>
@@ -191,6 +197,13 @@
               <div id="decor-palette-panel" class="palette-tab-panel" role="tabpanel" aria-labelledby="decor-palette-tab" hidden>
                 <div id="decor-palette" class="palette-grid decor-tool-palette" aria-label="Decor palette"></div>
               </div>
+
+              <div id="background-palette-panel" class="palette-tab-panel" role="tabpanel" aria-labelledby="background-palette-tab" hidden>
+                <button id="background-palette-button" class="palette-card background-palette-card is-active" type="button">
+                  <span id="background-palette-preview" class="palette-preview background-palette-preview" aria-hidden="true"></span>
+                  <strong>Background</strong>
+                </button>
+              </div>
             </div>
           </section>
 
@@ -200,6 +213,14 @@
               <span class="chevron-icon" aria-hidden="true"></span>
             </button>
             <div id="tools-content" class="tool-grid collapsible-content" aria-label="Editing tools">
+              <button class="edit-tool editor-action-button" type="button" data-editor-action="undo">
+                <span class="edit-tool-icon edit-tool-icon-undo" aria-hidden="true"></span>
+                <strong>Undo</strong>
+              </button>
+              <button class="edit-tool editor-action-button" type="button" data-editor-action="redo">
+                <span class="edit-tool-icon edit-tool-icon-redo" aria-hidden="true"></span>
+                <strong>Redo</strong>
+              </button>
               <button class="edit-tool tool-button" type="button" data-tool="eraser">
                 <span class="edit-tool-icon edit-tool-icon-eraser" aria-hidden="true"></span>
                 <strong>Eraser</strong>
@@ -208,6 +229,46 @@
                 <span class="edit-tool-icon edit-tool-icon-move" aria-hidden="true"></span>
                 <strong>Move</strong>
               </button>
+              <button class="edit-tool tool-button" type="button" data-tool="rotate">
+                <span class="edit-tool-icon edit-tool-icon-rotate" aria-hidden="true"></span>
+                <strong>Rotate</strong>
+              </button>
+              <button class="edit-tool tool-button" type="button" data-tool="rectangle">
+                <span class="edit-tool-icon edit-tool-icon-rectangle" aria-hidden="true"></span>
+                <strong>Rect</strong>
+              </button>
+              <button class="edit-tool editor-action-button" type="button" data-editor-action="duplicate">
+                <span class="edit-tool-icon edit-tool-icon-duplicate" aria-hidden="true"></span>
+                <strong>Duplicate</strong>
+              </button>
+              <button class="edit-tool editor-action-button" type="button" data-editor-action="copy">
+                <span class="edit-tool-icon edit-tool-icon-copy" aria-hidden="true"></span>
+                <strong>Copy</strong>
+              </button>
+              <button class="edit-tool editor-action-button" type="button" data-editor-action="paste">
+                <span class="edit-tool-icon edit-tool-icon-paste" aria-hidden="true"></span>
+                <strong>Paste</strong>
+              </button>
+              <button class="edit-tool editor-action-button" type="button" data-editor-action="mirrorHorizontal">
+                <span class="edit-tool-icon edit-tool-icon-mirror-h" aria-hidden="true"></span>
+                <strong>Mirror H</strong>
+              </button>
+              <button class="edit-tool editor-action-button" type="button" data-editor-action="mirrorVertical">
+                <span class="edit-tool-icon edit-tool-icon-mirror-v" aria-hidden="true"></span>
+                <strong>Mirror V</strong>
+              </button>
+            </div>
+          </section>
+
+          <section class="panel-section layers-section">
+            <button class="section-toggle" type="button" data-panel-toggle="layers-content" aria-expanded="true">
+              <span>Layers</span>
+              <span class="chevron-icon" aria-hidden="true"></span>
+            </button>
+            <div id="layers-content" class="layer-controls collapsible-content" aria-label="Editor layers">
+              <button class="layer-button is-active" type="button" data-editor-layer="gameplay">Gameplay</button>
+              <button class="layer-button" type="button" data-editor-layer="decor">Decor</button>
+              <button class="layer-button" type="button" data-editor-layer="background">Background</button>
             </div>
           </section>
 
@@ -232,12 +293,6 @@
               <button class="toolbar-button" id="toolbar-stop-button" type="button">Stop</button>
               <button class="toolbar-button" id="toolbar-reset-view-button" type="button">Reset view</button>
               <div class="toolbar-spacer"></div>
-              <label class="inline-control">
-                Tile
-                <select id="grid-size-select">
-                  <option value="32" selected>32 px</option>
-                </select>
-              </label>
               <span id="tile-coordinate-label" class="tile-coordinate-label">Col 0 / Row 0</span>
               <span class="zoom-control" aria-label="Zoom">
                 <button id="zoom-out-button" type="button">-</button>
@@ -442,6 +497,14 @@
               <option value="#102018">Emerald lab</option>
               <option value="#211711">Copper cave</option>
               <option value="#111827">Arcade dark</option>
+            </select>
+          </label>
+          <label>
+            Death animation
+            <select id="death-animation-select">
+              <option value="burst" selected>Burst</option>
+              <option value="shatter">Shatter</option>
+              <option value="fade">Fade</option>
             </select>
           </label>
           <label>

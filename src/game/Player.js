@@ -2,11 +2,13 @@
   window.TechnoDash = window.TechnoDash || {};
 
   class Player {
-    constructor(scene, x, groundY) {
+    constructor(scene, x, groundY, ceilingY = 0) {
       this.scene = scene;
       this.x = x;
       this.size = window.TechnoDash.Level.getPlayerSize();
       this.groundY = groundY;
+      this.ceilingY = ceilingY;
+      this.gravityDirection = 1;
       this.y = groundY - this.size / 2;
       this.velocityY = 0;
       this.grounded = true;
@@ -18,10 +20,16 @@
     }
 
     reset(settings) {
+      this.gravityDirection = 1;
       this.y = this.groundY - this.size / 2;
       this.velocityY = 0;
       this.grounded = true;
       this.settings = settings;
+      this.sprite.setVisible(true);
+      this.sprite.setAlpha(1);
+      this.sprite.setScale(1, 1);
+      this.sprite.setAngle(0);
+      this.sprite.setFillStyle(0x31c48d, 1);
       this.syncSprite();
     }
 
@@ -30,21 +38,26 @@
         return false;
       }
 
-      this.velocityY = -jumpForce;
+      this.velocityY = -jumpForce * this.gravityDirection;
       this.grounded = false;
       return true;
     }
 
     update(deltaSeconds, settings, options = {}) {
       if (options.applyGravity !== false) {
-        this.velocityY += settings.gravity * deltaSeconds;
+        this.velocityY += settings.gravity * this.gravityDirection * deltaSeconds;
       }
 
       this.y += this.velocityY * deltaSeconds;
 
       const bottom = this.y + this.size / 2;
-      if (bottom >= this.groundY) {
+      const top = this.y - this.size / 2;
+      if (this.gravityDirection === 1 && bottom >= this.groundY) {
         this.y = this.groundY - this.size / 2;
+        this.velocityY = 0;
+        this.grounded = true;
+      } else if (this.gravityDirection === -1 && top <= this.ceilingY) {
+        this.y = this.ceilingY + this.size / 2;
         this.velocityY = 0;
         this.grounded = true;
       } else {
@@ -54,15 +67,35 @@
       this.syncSprite();
     }
 
-    landOn(surfaceY) {
-      this.y = surfaceY - this.size / 2;
+    landOn(surfaceY, gravityDirection = this.gravityDirection) {
+      this.y = gravityDirection === -1
+        ? surfaceY + this.size / 2
+        : surfaceY - this.size / 2;
       this.velocityY = 0;
       this.grounded = true;
       this.syncSprite();
     }
 
+    setGravityDirection(direction) {
+      const nextDirection = direction === -1 ? -1 : 1;
+      if (this.gravityDirection === nextDirection) {
+        return false;
+      }
+
+      this.gravityDirection = nextDirection;
+      this.velocityY = 0;
+      this.grounded = false;
+      this.syncSprite();
+      return true;
+    }
+
+    flipGravity() {
+      return this.setGravityDirection(this.gravityDirection === 1 ? -1 : 1);
+    }
+
     syncSprite() {
       this.sprite.setPosition(this.x, this.y);
+      this.sprite.setRotation(this.gravityDirection === -1 ? Math.PI : 0);
     }
 
     getBounds() {

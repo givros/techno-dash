@@ -17,6 +17,7 @@
       this.restartWasDown = false;
       this.jumpQueued = false;
       this.jumpQueuedAt = 0;
+      this.jumpQueuedFrameId = 0;
       this.restartQueued = false;
       this.jumpBufferMs = 120;
       this.coyoteMs = 70;
@@ -29,6 +30,7 @@
       this.frameDecorations = null;
       this.frameScreenObjectsScrollX = null;
       this.frameDecorationsScrollX = null;
+      this.updateFrameId = 0;
       this.staticWorldDirty = true;
       this.staticWorldSignature = "";
       this.lastStatsPublishTime = 0;
@@ -44,6 +46,18 @@
       this.pendingPlay = false;
       this.programFeatures = GameScene.createProgramFeatures({ activeBlockIds: [] });
       this.decorSprites = new Map();
+      this.effectParticles = [];
+      this.endAnimationPlayed = false;
+      this.endPlayerHidden = false;
+      this.activatedGravitySwitchIds = new Set();
+      this.activatedObjectIds = new Set();
+      this.disabledObjectIds = new Set();
+      this.speedBoostUntil = 0;
+      this.speedMultiplier = 1;
+      this.runElapsedMs = 0;
+      this.adaptiveQualityLevel = 0;
+      this.slowFrameMs = 0;
+      this.fastFrameMs = 0;
     }
 
     static createProgramFeatures(programState) {
@@ -128,7 +142,8 @@
           : 1,
         logicalWidth: Number.isFinite(Number(profile.logicalWidth)) ? Number(profile.logicalWidth) : 0,
         logicalHeight: Number.isFinite(Number(profile.logicalHeight)) ? Number(profile.logicalHeight) : 0,
-        useDecorationAtlas: Boolean(profile.useDecorationAtlas)
+        useDecorationAtlas: Boolean(profile.useDecorationAtlas),
+        adaptiveQuality: Boolean(profile.adaptiveQuality)
       };
     }
 
@@ -150,6 +165,7 @@
       this.worldWidth = this.performanceProfile.logicalWidth || this.scale.width;
       this.worldHeight = this.performanceProfile.logicalHeight || this.scale.height;
       this.tileSize = window.TechnoDash.Level.getTileSize();
+      this.ceilingY = 0;
       this.groundY = this.worldHeight - this.tileSize;
       this.playerX = this.tileSize * 3 + this.tileSize / 2;
       this.cameras.main.setZoom(this.performanceProfile.renderScale);
@@ -160,7 +176,9 @@
       this.gridGraphics.setDepth(0.5);
       this.levelGraphics = this.add.graphics();
       this.levelGraphics.setDepth(2);
-      this.player = new window.TechnoDash.Player(this, this.playerX, this.groundY);
+      this.effectsGraphics = this.add.graphics();
+      this.effectsGraphics.setDepth(12);
+      this.player = new window.TechnoDash.Player(this, this.playerX, this.groundY, this.ceilingY);
       this.syncProgramVisuals();
       this.handleGlobalKeydown = (event) => this.onGlobalKeydown(event);
       this.handleGlobalKeyup = (event) => this.onGlobalKeyup(event);
@@ -191,6 +209,9 @@
 
     setPerformanceProfile(profile = {}) {
       this.performanceProfile = GameScene.createPerformanceProfile(profile);
+      this.adaptiveQualityLevel = 0;
+      this.slowFrameMs = 0;
+      this.fastFrameMs = 0;
       this.staticWorldDirty = true;
     }
 
@@ -214,7 +235,7 @@
 
     syncProgramVisuals() {
       if (this.player && this.player.sprite) {
-        this.player.sprite.setVisible(this.programFeatures.player);
+        this.player.sprite.setVisible(this.programFeatures.player && !this.endPlayerHidden);
       }
     }
 
@@ -363,6 +384,15 @@
       this.ended = false;
       this.running = Boolean(shouldPlay);
       this.status = shouldPlay ? "Playing" : "Ready";
+      this.activatedGravitySwitchIds.clear();
+      this.activatedObjectIds.clear();
+      this.disabledObjectIds.clear();
+      this.speedBoostUntil = 0;
+      this.speedMultiplier = 1;
+      this.runElapsedMs = 0;
+      this.effectParticles = [];
+      this.endAnimationPlayed = false;
+      this.endPlayerHidden = false;
       this.spaceWasDown = false;
       this.restartWasDown = false;
       this.clearJumpRequest();
@@ -385,6 +415,7 @@
       }
 
       this.lastUpdateTime = time;
+      this.updateFrameId += 1;
       this.beginFrameCache();
 
       const keyboardBlocked = this.shouldIgnoreGameKeyboard();
@@ -407,6 +438,11 @@
 
       const spaceDown = keyboardBlocked ? false : this.keyState.space;
       if (!this.running || this.ended) {
+        const idleDeltaMs = Math.max(0, Math.min(Number(deltaMs) || 0, this.maxFrameDeltaMs));
+        this.updateEffectParticles(idleDeltaMs);
+        if (this.effectParticles.length) {
+          this.renderWorld();
+        }
         this.spaceWasDown = spaceDown;
         this.expireJumpRequest(time);
         this.frameHadJumpPress = false;
@@ -420,6 +456,8 @@
       this.frameHadJumpPress = this.hasBufferedJump(time);
 
       const totalDeltaMs = Math.max(0, Math.min(Number(deltaMs) || 0, this.maxFrameDeltaMs));
+      this.updateAdaptivePerformance(totalDeltaMs);
+      this.runElapsedMs += totalDeltaMs;
       const stepCount = Math.max(1, Math.ceil(totalDeltaMs / this.maxPhysicsStepMs));
       const stepMs = totalDeltaMs / stepCount;
       const stepSeconds = stepMs / 1000;
@@ -438,7 +476,7 @@
 
         const previousScrollX = this.scrollX;
         if (this.hasLoopBlock("moveLevel")) {
-          this.scrollX += settings.speed * stepSeconds;
+          this.scrollX += this.getCurrentRunSpeed(settings, stepTime) * stepSeconds;
           this.invalidateFrameCache();
         }
 
@@ -450,6 +488,7 @@
           if (this.resolvePlatformCollisions(previousPlayerBounds) || this.player.grounded) {
             this.lastGroundedTime = stepTime;
           }
+          this.applyGameplayInteractions(settings, stepTime);
           this.tryRunBufferedJump(settings, stepTime);
         }
 
@@ -476,6 +515,7 @@
       this.spaceWasDown = spaceDown;
       this.distance = Math.max(0, Math.floor(this.scrollX));
       this.score = this.distance;
+      this.updateEffectParticles(totalDeltaMs);
       this.frameHadJumpPress = false;
       this.renderWorld();
       this.publishState({ time });
@@ -511,26 +551,33 @@
     }
 
     getCurrentTimeMs() {
-      if (typeof performance !== "undefined" && typeof performance.now === "function") {
-        return performance.now();
+      if (Number.isFinite(this.lastUpdateTime) && this.lastUpdateTime > 0) {
+        return this.lastUpdateTime;
       }
 
-      return Number.isFinite(this.lastUpdateTime) ? this.lastUpdateTime : 0;
+      const loopNow = this.game && this.game.loop ? Number(this.game.loop.now) : 0;
+      return Number.isFinite(loopNow) ? loopNow : 0;
     }
 
     requestJump(timeMs = this.getCurrentTimeMs()) {
       this.jumpQueued = true;
       this.jumpQueuedAt = Number.isFinite(timeMs) ? timeMs : this.getCurrentTimeMs();
+      this.jumpQueuedFrameId = this.updateFrameId;
     }
 
     clearJumpRequest() {
       this.jumpQueued = false;
       this.jumpQueuedAt = 0;
+      this.jumpQueuedFrameId = 0;
     }
 
     hasBufferedJump(timeMs = this.getCurrentTimeMs()) {
       if (!this.jumpQueued) {
         return false;
+      }
+
+      if (this.updateFrameId <= this.jumpQueuedFrameId + 1) {
+        return true;
       }
 
       return timeMs - this.jumpQueuedAt <= this.jumpBufferMs;
@@ -567,13 +614,95 @@
       const didJump = this.player.tryJump(settings.jumpForce, { allowAirborne: allowCoyoteJump });
       if (didJump) {
         this.clearJumpRequest();
+        this.triggerHaptic(12);
       }
 
       return didJump;
     }
 
+    forcePlayerJump(multiplier = 1.15) {
+      const settings = this.getRuntimeSettings();
+      this.player.tryJump(settings.jumpForce * multiplier, { allowAirborne: true });
+      this.clearJumpRequest();
+      this.lastGroundedTime = this.getCurrentTimeMs();
+      this.triggerHaptic(22);
+      return true;
+    }
+
+    updateAdaptivePerformance(deltaMs) {
+      if (!this.performanceProfile.adaptiveQuality || !this.running) {
+        return;
+      }
+
+      if (deltaMs > 34) {
+        this.slowFrameMs += deltaMs;
+        this.fastFrameMs = 0;
+      } else if (deltaMs < 22) {
+        this.fastFrameMs += deltaMs;
+        this.slowFrameMs = Math.max(0, this.slowFrameMs - deltaMs);
+      }
+
+      if (this.slowFrameMs > 900 && this.adaptiveQualityLevel < 2) {
+        this.adaptiveQualityLevel += 1;
+        this.applyAdaptiveQualityLevel();
+        this.slowFrameMs = 0;
+        return;
+      }
+
+      if (this.fastFrameMs > 7000 && this.adaptiveQualityLevel > 0) {
+        this.adaptiveQualityLevel -= 1;
+        this.applyAdaptiveQualityLevel();
+        this.fastFrameMs = 0;
+      }
+    }
+
+    applyAdaptiveQualityLevel() {
+      if (this.adaptiveQualityLevel >= 1) {
+        this.performanceProfile.lowDetail = true;
+        this.performanceProfile.showGrid = false;
+        this.performanceProfile.gridStep = Math.max(this.performanceProfile.gridStep, 2);
+      }
+      if (this.adaptiveQualityLevel >= 2) {
+        this.performanceProfile.gridStep = Math.max(this.performanceProfile.gridStep, 3);
+      }
+      if (this.adaptiveQualityLevel === 0) {
+        this.performanceProfile.lowDetail = false;
+        this.performanceProfile.gridStep = Math.max(1, this.performanceProfile.gridStep);
+      }
+      this.staticWorldDirty = true;
+    }
+
     getRuntimeSettings() {
       return this.level.getSettings();
+    }
+
+    getCurrentRunSpeed(settings = this.getRuntimeSettings(), timeMs = this.getCurrentTimeMs()) {
+      const zoneMultiplier = this.getActiveSpeedZoneMultiplier();
+      const portalMultiplier = timeMs < this.speedBoostUntil ? this.speedMultiplier : 1;
+      return settings.speed * zoneMultiplier * portalMultiplier;
+    }
+
+    getActiveSpeedZoneMultiplier() {
+      if (!this.player) {
+        return 1;
+      }
+
+      const playerBounds = this.player.getBounds();
+      const overlaps = window.TechnoDash.CollisionManager.findOverlappingObjects(
+        playerBounds,
+        this.getFrameScreenObjects(),
+        ["slowZone", "fastZone", "slipperyBlock"]
+      );
+      if (overlaps.some((object) => object.type === "fastZone")) {
+        return 1.35;
+      }
+      if (overlaps.some((object) => object.type === "slowZone")) {
+        return 0.62;
+      }
+      if (overlaps.some((object) => object.type === "slipperyBlock") && this.player.grounded) {
+        return 1.18;
+      }
+      return 1;
     }
 
     hasLoopBlock(blockId) {
@@ -703,11 +832,29 @@
         this.frameScreenObjects = this.level.getScreenObjects(this.scrollX, this.groundY, {
           viewportWidth: this.worldWidth,
           margin: this.tileSize * 5
-        });
+        })
+          .filter((object) => !this.disabledObjectIds.has(object.id))
+          .map((object) => this.applyDynamicObjectState(object));
         this.frameScreenObjectsScrollX = this.scrollX;
       }
 
       return this.frameScreenObjects;
+    }
+
+    applyDynamicObjectState(object) {
+      const next = { ...object };
+      if (next.type === "movingPlatform") {
+        const phase = (this.runElapsedMs / 1000) * 1.6 + next.column * 0.45;
+        const offsetY = Math.round(Math.sin(phase) * this.tileSize * 1.5);
+        next.top += offsetY;
+        next.bottom += offsetY;
+      }
+
+      if (next.type === "laser") {
+        next.isActive = Math.floor((this.runElapsedMs + next.column * 90) / 850) % 2 === 0;
+      }
+
+      return next;
     }
 
     getFrameDecorations() {
@@ -788,15 +935,193 @@
         this.player.getBounds(),
         previousPlayerBounds,
         screenObjects,
-        this.player.velocityY
+        this.player.velocityY,
+        this.player.gravityDirection
       );
 
       if (platform) {
-        this.player.landOn(platform.top);
+        const surfaceY = this.player.gravityDirection === -1 ? platform.bottom : platform.top;
+        this.player.landOn(surfaceY, this.player.gravityDirection);
+        if (platform.type === "trampolineBlock") {
+          this.forcePlayerJump(1.28);
+        }
+        if (platform.type === "breakableBlock") {
+          this.disabledObjectIds.add(platform.id);
+          this.invalidateFrameCache();
+        }
         return true;
       }
 
       return false;
+    }
+
+    applyGravitySwitches() {
+      if (!this.programFeatures.obstacles || !this.player) {
+        return false;
+      }
+
+      const gravitySwitch = window.TechnoDash.CollisionManager.findGravitySwitchCollision(
+        this.player.getBounds(),
+        this.getFrameScreenObjects()
+      );
+      if (!gravitySwitch || this.activatedGravitySwitchIds.has(gravitySwitch.id)) {
+        return false;
+      }
+
+      this.activatedGravitySwitchIds.add(gravitySwitch.id);
+      this.player.flipGravity();
+      this.showGravityFeedback();
+      this.lastGroundedTime = this.getCurrentTimeMs();
+      return true;
+    }
+
+    applyGameplayInteractions(settings, timeMs = this.getCurrentTimeMs()) {
+      if (!this.programFeatures.obstacles || !this.player) {
+        return false;
+      }
+
+      let changed = this.applyGravitySwitches();
+      const playerBounds = this.player.getBounds();
+      const screenObjects = this.getFrameScreenObjects();
+
+      const forcedGravity = window.TechnoDash.CollisionManager.findOverlappingObjects(
+        playerBounds,
+        screenObjects,
+        ["gravityUpPortal", "gravityDownPortal", "gravityUpZone", "gravityDownZone"]
+      )[0];
+      if (forcedGravity) {
+        const nextDirection = ["gravityUpPortal", "gravityUpZone"].includes(forcedGravity.type) ? -1 : 1;
+        const oneShotPortal = forcedGravity.type.endsWith("Portal");
+        if (!oneShotPortal || !this.activatedObjectIds.has(forcedGravity.id)) {
+          if (oneShotPortal) {
+            this.activatedObjectIds.add(forcedGravity.id);
+          }
+          if (this.player.setGravityDirection(nextDirection)) {
+            this.showGravityFeedback();
+            changed = true;
+          }
+        }
+      }
+
+      const speedPortal = window.TechnoDash.CollisionManager.findOverlappingObjects(playerBounds, screenObjects, "speedPortal")[0];
+      if (speedPortal && !this.activatedObjectIds.has(speedPortal.id)) {
+        this.activatedObjectIds.add(speedPortal.id);
+        this.speedMultiplier = 1.45;
+        this.speedBoostUntil = timeMs + 2400;
+        this.triggerHaptic(12);
+        changed = true;
+      }
+
+      const jumpPad = window.TechnoDash.CollisionManager.findOverlappingObjects(playerBounds, screenObjects, "jumpPad")[0];
+      if (jumpPad && !this.activatedObjectIds.has(jumpPad.id)) {
+        this.activatedObjectIds.add(jumpPad.id);
+        this.forcePlayerJump(1.18);
+        changed = true;
+      }
+
+      const jumpOrb = window.TechnoDash.CollisionManager.findOverlappingObjects(playerBounds, screenObjects, "jumpOrb")[0];
+      if (jumpOrb && this.hasBufferedJump(timeMs) && !this.activatedObjectIds.has(`${jumpOrb.id}-${Math.floor(timeMs / 160)}`)) {
+        this.activatedObjectIds.add(`${jumpOrb.id}-${Math.floor(timeMs / 160)}`);
+        this.forcePlayerJump(1.05);
+        changed = true;
+      }
+
+      const disposable = window.TechnoDash.CollisionManager.findOverlappingObjects(
+        playerBounds,
+        screenObjects,
+        "breakableBlock"
+      )[0];
+      if (disposable && !this.disabledObjectIds.has(disposable.id)) {
+        this.disabledObjectIds.add(disposable.id);
+        this.triggerHaptic(18);
+        changed = true;
+      }
+
+      if (changed) {
+        this.invalidateFrameCache();
+      }
+      return changed;
+    }
+
+    showGravityFeedback() {
+      this.triggerHaptic(18);
+      this.spawnGravityParticles();
+      if (this.cameras && this.cameras.main && typeof this.cameras.main.flash === "function") {
+        this.cameras.main.flash(110, 139, 92, 246, false);
+      }
+      if (this.cameras && this.cameras.main && typeof this.cameras.main.shake === "function") {
+        this.cameras.main.shake(70, 0.004);
+      }
+    }
+
+    spawnGravityParticles() {
+      if (!this.player || this.performanceProfile.lowDetail) {
+        return;
+      }
+
+      const direction = this.player.gravityDirection === -1 ? -1 : 1;
+      for (let index = 0; index < 18; index += 1) {
+        const angle = (Math.PI * 2 * index) / 18;
+        const speed = 70 + (index % 5) * 18;
+        this.effectParticles.push({
+          kind: "gravity",
+          x: this.player.x,
+          y: this.player.y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed - direction * 55,
+          age: 0,
+          life: 360 + (index % 4) * 55,
+          size: 2 + (index % 3)
+        });
+      }
+    }
+
+    spawnEndParticles(status) {
+      if (!this.player) {
+        return;
+      }
+
+      const color = status === "Victory" ? 0x5eead4 : 0xff4d5a;
+      const count = this.performanceProfile.lowDetail ? 12 : 26;
+      for (let index = 0; index < count; index += 1) {
+        const angle = (Math.PI * 2 * index) / count;
+        const speed = 90 + (index % 6) * 22;
+        this.effectParticles.push({
+          kind: "end",
+          color,
+          x: this.player.x,
+          y: this.player.y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          age: 0,
+          life: status === "Victory" ? 620 : 460,
+          size: status === "Victory" ? 3 + (index % 2) : 2 + (index % 4)
+        });
+      }
+    }
+
+    updateEffectParticles(deltaMs) {
+      if (!this.effectParticles.length) {
+        return;
+      }
+
+      const dt = Math.max(0, Number(deltaMs) || 0);
+      const seconds = dt / 1000;
+      this.effectParticles = this.effectParticles
+        .map((particle) => ({
+          ...particle,
+          age: particle.age + dt,
+          x: particle.x + particle.vx * seconds,
+          y: particle.y + particle.vy * seconds,
+          vy: particle.vy + 180 * seconds
+        }))
+        .filter((particle) => particle.age < particle.life);
+    }
+
+    triggerHaptic(duration = 12) {
+      if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+        navigator.vibrate(duration);
+      }
     }
 
     resolveSolidBlockSideCollisions(previousScrollX) {
@@ -807,7 +1132,8 @@
       const screenObjects = this.getFrameScreenObjects();
       const solidBlock = window.TechnoDash.CollisionManager.findSolidBlockSideCollision(
         this.player.getBounds(),
-        screenObjects
+        screenObjects,
+        this.player.gravityDirection
       );
 
       if (!solidBlock) {
@@ -829,7 +1155,65 @@
       this.running = false;
       this.ended = true;
       this.status = status;
+      this.playEndAnimation(status);
+      this.triggerHaptic(status === "Game Over" ? 42 : 24);
+      this.renderWorld();
       this.publishState({ force: true });
+    }
+
+    playEndAnimation(status) {
+      if (this.endAnimationPlayed || !this.player || !this.player.sprite) {
+        return;
+      }
+
+      this.endAnimationPlayed = true;
+      this.spawnEndParticles(status);
+      const sprite = this.player.sprite;
+      if (status === "Victory") {
+        sprite.setVisible(true);
+        sprite.setFillStyle(0x5eead4, 1);
+        this.tweens.add({
+          targets: sprite,
+          scaleX: 1.35,
+          scaleY: 1.35,
+          angle: sprite.angle + 360,
+          duration: 520,
+          ease: "Back.Out"
+        });
+        return;
+      }
+
+      const style = this.levelData && this.levelData.settings
+        ? this.levelData.settings.deathAnimation
+        : "burst";
+      if (style === "fade") {
+        this.tweens.add({
+          targets: sprite,
+          alpha: 0,
+          scaleX: 0.35,
+          scaleY: 0.35,
+          duration: 320,
+          ease: "Quad.Out"
+        });
+        return;
+      }
+
+      if (style === "shatter") {
+        this.tweens.add({
+          targets: sprite,
+          angle: sprite.angle + 160,
+          scaleX: 0.7,
+          scaleY: 1.35,
+          alpha: 0.35,
+          duration: 260,
+          yoyo: true,
+          ease: "Cubic.Out"
+        });
+        return;
+      }
+
+      this.endPlayerHidden = true;
+      sprite.setVisible(false);
     }
 
     renderWorld() {
@@ -839,16 +1223,21 @@
 
       const gridGraphics = this.gridGraphics;
       const graphics = this.levelGraphics;
+      const effectsGraphics = this.effectsGraphics;
       const settings = this.getRuntimeSettings();
       this.renderStaticWorld(settings);
       gridGraphics.clear();
       graphics.clear();
+      if (effectsGraphics) {
+        effectsGraphics.clear();
+      }
 
       if (this.programFeatures.background && this.performanceProfile.showGrid) {
         this.drawBackgroundGrid(gridGraphics);
       }
       this.renderDecorations();
       this.drawLevelObjects(graphics);
+      this.drawEffectParticles(effectsGraphics);
       this.syncProgramVisuals();
     }
 
@@ -868,6 +1257,7 @@
       backgroundGraphics.clear();
       backgroundGraphics.fillStyle(window.TechnoDash.Level.hexToNumber(settings.backgroundColor, 0x071322), 1);
       backgroundGraphics.fillRect(0, 0, this.worldWidth, this.worldHeight);
+      this.drawThemeAtmosphere(backgroundGraphics, settings.backgroundColor);
       if (this.programFeatures.ground) {
         this.drawGround(backgroundGraphics);
       }
@@ -985,6 +1375,31 @@
       graphics.lineBetween(0, this.groundY, this.worldWidth, this.groundY);
     }
 
+    drawThemeAtmosphere(graphics, color) {
+      const accent = window.TechnoDash.Level.hexToNumber(color, 0x2db8ff) ^ 0x5eead4;
+      graphics.fillStyle(0xffffff, 0.035);
+      graphics.fillRect(0, 0, this.worldWidth, Math.max(24, this.worldHeight * 0.18));
+      graphics.fillStyle(accent, 0.08);
+      for (let index = 0; index < 4; index += 1) {
+        const y = Math.round((index + 1) * this.worldHeight * 0.16);
+        graphics.fillRect(0, y, this.worldWidth, 2);
+      }
+    }
+
+    drawEffectParticles(graphics) {
+      if (!graphics || !this.effectParticles.length) {
+        return;
+      }
+
+      this.effectParticles.forEach((particle) => {
+        const progress = Math.min(1, particle.age / particle.life);
+        const alpha = Math.max(0, 1 - progress);
+        const color = particle.color || 0x8b5cf6;
+        graphics.fillStyle(color, alpha * 0.82);
+        graphics.fillCircle(particle.x, particle.y, particle.size * (1 + progress * 0.65));
+      });
+    }
+
     drawLevelObjects(graphics) {
       const screenObjects = this.getFrameScreenObjects();
 
@@ -1001,40 +1416,33 @@
           return;
         }
 
-        if (object.type === "triangle") {
-          graphics.fillStyle(0xd9433e, 1);
-          graphics.fillTriangle(object.left, object.bottom, object.screenX, object.top, object.right, object.bottom);
-          if (!this.performanceProfile.lowDetail) {
-            graphics.lineStyle(2, 0xffffff, 0.7);
-            graphics.strokeTriangle(object.left, object.bottom, object.screenX, object.top, object.right, object.bottom);
-          }
+        if (object.type === "triangle" || object.type === "animatedSpike") {
+          this.drawTriangleObstacle(graphics, object);
           return;
         }
 
         if (object.type === "block") {
-          const colors = window.TechnoDash.Level.getObstacleColorStyle(object.type, object.color);
-          graphics.fillStyle(window.TechnoDash.Level.hexToNumber(colors.color, 0xf0b429), 1);
-          graphics.fillRect(object.left, object.top, object.width, object.height);
-          graphics.fillStyle(window.TechnoDash.Level.hexToNumber(colors.danger, 0xc7352f), 1);
-          graphics.fillRect(object.left, object.top + 6, Math.min(12, object.width * 0.24), object.height - 12);
-          if (!this.performanceProfile.lowDetail) {
-            graphics.lineStyle(2, window.TechnoDash.Level.hexToNumber(colors.stroke, 0x4d3500), 0.8);
-            graphics.strokeRect(object.left, object.top, object.width, object.height);
-          }
+          this.drawDangerBlock(graphics, object);
           return;
         }
 
         if (window.TechnoDash.Level.isSolidBlockType(object.type)) {
-          const colors = window.TechnoDash.Level.getObstacleColorStyle(object.type, object.color);
-          graphics.fillStyle(window.TechnoDash.Level.hexToNumber(colors.color, 0x5aa7e8), 1);
-          graphics.fillRect(object.left, object.top, object.width, object.height);
+          this.drawSolidBlock(graphics, object);
           return;
         }
 
-        if (object.type === "platform") {
-          const colors = window.TechnoDash.Level.getObstacleColorStyle(object.type, object.color);
-          graphics.fillStyle(window.TechnoDash.Level.hexToNumber(colors.color, 0x35b6a6), 1);
-          graphics.fillRect(object.left, object.top, object.width, object.height);
+        if (window.TechnoDash.Level.isPlatformType(object.type)) {
+          this.drawPlatformObject(graphics, object);
+          return;
+        }
+
+        if (window.TechnoDash.Level.isModifierType(object.type)) {
+          this.drawModifierObject(graphics, object);
+          return;
+        }
+
+        if (object.type === "laser") {
+          this.drawLaser(graphics, object);
           return;
         }
 
@@ -1042,7 +1450,204 @@
       });
     }
 
+    drawSolidBlock(graphics, object) {
+      const colors = window.TechnoDash.Level.getObstacleColorStyle(object.type, object.color) || { color: "#5aa7e8", accent: "#9bd0ff", stroke: "#1f5f93" };
+      graphics.fillStyle(window.TechnoDash.Level.hexToNumber(colors.color, 0x5aa7e8), 1);
+      graphics.fillRect(object.left, object.top, object.width, object.height);
+      if (object.type === "breakableBlock") {
+        graphics.lineStyle(2, 0x3d2415, 0.72);
+        graphics.lineBetween(object.left + 6, object.top + 6, object.right - 8, object.bottom - 7);
+        graphics.lineBetween(object.left + 10, object.bottom - 5, object.left + 20, object.top + 8);
+      } else if (object.type === "slipperyBlock") {
+        graphics.lineStyle(2, 0xd7f8ff, 0.82);
+        graphics.lineBetween(object.left + 5, object.top + 9, object.right - 5, object.top + 9);
+        graphics.lineBetween(object.left + 5, object.bottom - 9, object.right - 5, object.bottom - 9);
+      }
+    }
+
+    drawPlatformObject(graphics, object) {
+      const colors = window.TechnoDash.Level.getObstacleColorStyle(object.type, object.color) || window.TechnoDash.Level.getObstacleColorStyle("platform", object.color);
+      const fill = object.type === "trampolineBlock" ? 0xf97316 : window.TechnoDash.Level.hexToNumber(colors.color, 0x35b6a6);
+      graphics.fillStyle(fill, 1);
+      graphics.fillRect(object.left, object.top, object.width, object.height);
+      if (object.type === "oneWayPlatform") {
+        graphics.fillStyle(0xf4f7fb, 0.9);
+        graphics.fillTriangle(object.screenX, object.top + 7, object.screenX - 8, object.bottom - 7, object.screenX + 8, object.bottom - 7);
+      } else if (object.type === "movingPlatform") {
+        graphics.lineStyle(2, 0xf4f7fb, 0.8);
+        graphics.lineBetween(object.left + 7, object.top + object.height / 2, object.right - 7, object.top + object.height / 2);
+        graphics.fillTriangle(object.left + 8, object.top + object.height / 2, object.left + 17, object.top + 8, object.left + 17, object.bottom - 8);
+        graphics.fillTriangle(object.right - 8, object.top + object.height / 2, object.right - 17, object.top + 8, object.right - 17, object.bottom - 8);
+      } else if (object.type === "trampolineBlock") {
+        graphics.lineStyle(3, 0xfed7aa, 1);
+        graphics.lineBetween(object.left + 5, object.bottom - 8, object.left + 12, object.top + 8);
+        graphics.lineBetween(object.left + 12, object.top + 8, object.left + 19, object.bottom - 8);
+        graphics.lineBetween(object.left + 19, object.bottom - 8, object.right - 5, object.top + 8);
+      }
+    }
+
+    drawModifierObject(graphics, object) {
+      if (object.type === "gravitySwitch") {
+        this.drawGravitySwitch(graphics, object);
+        return;
+      }
+
+      const centerX = object.screenX;
+      const centerY = (object.top + object.bottom) / 2;
+      const isZone = object.type.endsWith("Zone");
+      const isGravity = object.type.startsWith("gravity");
+      const isSpeed = object.type === "speedPortal" || object.type === "slowZone" || object.type === "fastZone";
+      const fill = isGravity ? 0x8b5cf6 : isSpeed ? 0x2dd4bf : 0xf97316;
+      graphics.fillStyle(fill, isZone ? 0.24 : 0.95);
+      graphics.fillRect(object.left, object.top, object.width, object.height);
+      graphics.lineStyle(2, fill, 0.9);
+      graphics.strokeRect(object.left, object.top, object.width, object.height);
+      graphics.fillStyle(0xf4f7fb, 1);
+
+      if (object.type === "slowZone") {
+        graphics.fillRect(centerX - 9, centerY - 3, 18, 6);
+        return;
+      }
+
+      if (object.type === "fastZone" || object.type === "speedPortal") {
+        graphics.fillTriangle(centerX - 9, centerY - 11, centerX + 11, centerY, centerX - 9, centerY + 11);
+        return;
+      }
+
+      const up = object.type.includes("Up") || object.type === "jumpPad" || object.type === "jumpOrb";
+      if (object.type === "jumpOrb") {
+        graphics.lineStyle(2, 0xf4f7fb, 0.92);
+        graphics.strokeCircle(centerX, centerY, 10);
+      }
+      graphics.fillTriangle(
+        centerX,
+        up ? object.top + 7 : object.bottom - 7,
+        centerX - 9,
+        up ? object.bottom - 8 : object.top + 8,
+        centerX + 9,
+        up ? object.bottom - 8 : object.top + 8
+      );
+    }
+
+    drawLaser(graphics, object) {
+      const alpha = object.isActive === false ? 0.22 : 0.92;
+      graphics.fillStyle(0xef4444, alpha);
+      graphics.fillRect(object.left + object.width * 0.35, object.top, object.width * 0.3, object.height);
+      graphics.fillStyle(0xfca5a5, Math.min(1, alpha + 0.08));
+      graphics.fillRect(object.left + object.width * 0.43, object.top, object.width * 0.14, object.height);
+      graphics.fillStyle(0x111827, 1);
+      graphics.fillRect(object.left, object.top, object.width, 8);
+      graphics.fillRect(object.left, object.bottom - 8, object.width, 8);
+    }
+
+    drawTriangleObstacle(graphics, object) {
+      const points = this.getTriangleDrawPoints(object);
+      const alpha = object.type === "animatedSpike"
+        ? 0.78 + Math.sin(this.runElapsedMs / 130 + object.column) * 0.18
+        : 1;
+      graphics.fillStyle(0xd9433e, alpha);
+      graphics.fillTriangle(points[0].x, points[0].y, points[1].x, points[1].y, points[2].x, points[2].y);
+      if (!this.performanceProfile.lowDetail) {
+        graphics.lineStyle(2, 0xffffff, 0.7);
+        graphics.strokeTriangle(points[0].x, points[0].y, points[1].x, points[1].y, points[2].x, points[2].y);
+      }
+    }
+
+    getTriangleDrawPoints(object) {
+      const rotation = window.TechnoDash.Level.normalizeRotation(object.rotation, object.type);
+      const middleX = (object.left + object.right) / 2;
+      const middleY = (object.top + object.bottom) / 2;
+      if (rotation === 90) {
+        return [
+          { x: object.left, y: object.top },
+          { x: object.right, y: middleY },
+          { x: object.left, y: object.bottom }
+        ];
+      }
+
+      if (rotation === 180) {
+        return [
+          { x: object.left, y: object.top },
+          { x: object.right, y: object.top },
+          { x: middleX, y: object.bottom }
+        ];
+      }
+
+      if (rotation === 270) {
+        return [
+          { x: object.right, y: object.top },
+          { x: object.right, y: object.bottom },
+          { x: object.left, y: middleY }
+        ];
+      }
+
+      return [
+        { x: object.left, y: object.bottom },
+        { x: middleX, y: object.top },
+        { x: object.right, y: object.bottom }
+      ];
+    }
+
+    drawDangerBlock(graphics, object) {
+      const colors = window.TechnoDash.Level.getObstacleColorStyle(object.type, object.color);
+      const rotation = window.TechnoDash.Level.normalizeRotation(object.rotation, object.type);
+      const faceSize = Math.min(12, Math.max(8, (rotation === 90 || rotation === 270 ? object.height : object.width) * 0.24));
+      graphics.fillStyle(window.TechnoDash.Level.hexToNumber(colors.color, 0xf0b429), 1);
+      graphics.fillRect(object.left, object.top, object.width, object.height);
+      graphics.fillStyle(window.TechnoDash.Level.hexToNumber(colors.danger, 0xc7352f), 1);
+
+      if (rotation === 90) {
+        graphics.fillRect(object.left + 6, object.top, object.width - 12, faceSize);
+      } else if (rotation === 180) {
+        graphics.fillRect(object.right - faceSize, object.top + 6, faceSize, object.height - 12);
+      } else if (rotation === 270) {
+        graphics.fillRect(object.left + 6, object.bottom - faceSize, object.width - 12, faceSize);
+      } else {
+        graphics.fillRect(object.left, object.top + 6, faceSize, object.height - 12);
+      }
+
+      if (!this.performanceProfile.lowDetail) {
+        graphics.lineStyle(2, window.TechnoDash.Level.hexToNumber(colors.stroke, 0x4d3500), 0.8);
+        graphics.strokeRect(object.left, object.top, object.width, object.height);
+      }
+    }
+
+    drawGravitySwitch(graphics, object) {
+      const centerX = object.screenX;
+      const centerY = (object.top + object.bottom) / 2;
+      const radius = Math.min(object.width, object.height) / 2 - 3;
+      graphics.fillStyle(0x8b5cf6, 1);
+      graphics.fillCircle(centerX, centerY, radius);
+      graphics.lineStyle(2, 0xffffff, 0.8);
+      graphics.strokeCircle(centerX, centerY, radius);
+      graphics.fillStyle(0xf4f7fb, 1);
+      graphics.fillTriangle(
+        centerX,
+        object.top + 7,
+        centerX - 7,
+        centerY + 2,
+        centerX + 7,
+        centerY + 2
+      );
+      graphics.fillTriangle(
+        centerX,
+        object.bottom - 7,
+        centerX - 7,
+        centerY - 2,
+        centerX + 7,
+        centerY - 2
+      );
+    }
+
     drawFinish(graphics, object) {
+      const poleX = object.screenX;
+      const poleTop = 0;
+      const poleBottom = Number.isFinite(object.groundY) ? object.groundY : this.groundY;
+      graphics.lineStyle(8, 0x111827, 0.9);
+      graphics.lineBetween(poleX, poleTop, poleX, poleBottom);
+      graphics.lineStyle(4, 0xf4f7fb, 1);
+      graphics.lineBetween(poleX, poleTop, poleX, poleBottom);
+
       graphics.fillStyle(0xffffff, 1);
       graphics.fillRect(object.left, object.top, object.width, object.height);
       const stripeSize = 8;

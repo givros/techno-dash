@@ -154,7 +154,6 @@
       zoomOutButton: document.getElementById("zoom-out-button"),
       zoomInButton: document.getElementById("zoom-in-button"),
       zoomLabel: document.getElementById("zoom-label"),
-      gridSizeSelect: document.getElementById("grid-size-select"),
       themeSelect: document.getElementById("theme-select"),
       speedOutput: document.getElementById("speed-output"),
       gravityOutput: document.getElementById("gravity-output"),
@@ -177,6 +176,8 @@
       levelScroll: document.getElementById("level-scroll"),
       paletteTabs: [...document.querySelectorAll("[data-palette-tab]")],
       palettePanels: [...document.querySelectorAll(".palette-tab-panel")],
+      backgroundPaletteButton: document.getElementById("background-palette-button"),
+      backgroundPalettePreview: document.getElementById("background-palette-preview"),
       panelToggles: [...document.querySelectorAll("[data-panel-toggle]")],
       statsButton: document.getElementById("stats-button"),
       statsModal: document.getElementById("stats-modal"),
@@ -195,6 +196,8 @@
       }
       return cleaned;
     };
+
+    const preloadAssetCache = new Map();
 
     const slugifyLevelName = (name) => {
       const source = sanitizeLevelName(name);
@@ -335,36 +338,103 @@
     const getGamePerformanceProfile = () => {
       const mobilePerformance = isMobileGamePerformanceMode();
       const logicalViewport = window.TechnoDash.Level.getViewportSize();
-      const renderScale = 1;
+      const scene = {
+        lowDetail: false,
+        showGrid: true,
+        renderDecorations: true,
+        gridStep: 1,
+        renderScale: 1,
+        logicalWidth: logicalViewport.width,
+        logicalHeight: logicalViewport.height,
+        useDecorationAtlas: mobilePerformance,
+        adaptiveQuality: mobilePerformance
+      };
+      if (!mobilePerformance) {
+        scene.useDecorationAtlas = false;
+        scene.adaptiveQuality = false;
+      }
       return {
         mobilePerformance,
         logicalViewport,
         renderViewport: {
-          width: Math.round(logicalViewport.width * renderScale),
-          height: Math.round(logicalViewport.height * renderScale)
+          width: Math.round(logicalViewport.width * scene.renderScale),
+          height: Math.round(logicalViewport.height * scene.renderScale)
         },
-        scene: mobilePerformance
-          ? {
-            lowDetail: false,
-            showGrid: true,
-            renderDecorations: true,
-            gridStep: 1,
-            renderScale,
-            logicalWidth: logicalViewport.width,
-            logicalHeight: logicalViewport.height,
-            useDecorationAtlas: true
-          }
-          : {
-            lowDetail: false,
-            showGrid: true,
-            renderDecorations: true,
-            gridStep: 1,
-            renderScale,
-            logicalWidth: logicalViewport.width,
-            logicalHeight: logicalViewport.height,
-            useDecorationAtlas: false
-          }
+        scene
       };
+    };
+
+    const getLevelAssetPreloadList = (levelData) => {
+      const profile = getGamePerformanceProfile();
+      const data = window.TechnoDash.Level.normalize(levelData);
+      const types = [...new Set(data.decorations.map((decoration) => decoration.type))]
+        .map((type) => window.TechnoDash.Level.getDecorationForType(type))
+        .filter(Boolean);
+      if (!types.length) {
+        return [];
+      }
+
+      if (profile.scene.useDecorationAtlas) {
+        const themes = [...new Set(types.map((decoration) => decoration.theme).filter(Boolean))];
+        return themes.flatMap((theme) => [
+          { type: "image", src: window.TechnoDash.GameScene.getDecorationAtlasPath(theme, "png") },
+          { type: "json", src: window.TechnoDash.GameScene.getDecorationAtlasPath(theme, "json") }
+        ]);
+      }
+
+      return types.map((decoration) => ({
+        type: "image",
+        src: `assets/decor/${decoration.file}`
+      }));
+    };
+
+    const preloadAsset = (asset) => {
+      if (!asset || !asset.src) {
+        return Promise.resolve();
+      }
+
+      if (preloadAssetCache.has(asset.src)) {
+        return preloadAssetCache.get(asset.src);
+      }
+
+      const promise = asset.type === "json"
+        ? fetch(asset.src, { cache: "force-cache" }).then((response) => {
+          if (!response.ok) {
+            throw new Error(`Could not preload ${asset.src}`);
+          }
+          return response.text();
+        })
+        : new Promise((resolve, reject) => {
+          const image = new Image();
+          image.onload = resolve;
+          image.onerror = () => reject(new Error(`Could not preload ${asset.src}`));
+          image.src = asset.src;
+        });
+      preloadAssetCache.set(asset.src, promise.catch((error) => {
+        preloadAssetCache.delete(asset.src);
+        throw error;
+      }));
+      return preloadAssetCache.get(asset.src);
+    };
+
+    const preloadLevelAssets = async (levelData) => {
+      const assets = getLevelAssetPreloadList(levelData);
+      if (!assets.length) {
+        return;
+      }
+
+      await Promise.allSettled(assets.map((asset) => preloadAsset(asset)));
+    };
+
+    const applyGamePerformanceProfile = () => {
+      const performanceProfile = getGamePerformanceProfile();
+      if (gameScene) {
+        gameScene.setPerformanceProfile(performanceProfile.scene);
+        if (gameScene.created && typeof gameScene.renderWorld === "function") {
+          gameScene.renderWorld();
+        }
+      }
+      return performanceProfile;
     };
 
     const showMobileEditorLockedMessage = () => {
@@ -450,6 +520,9 @@
 
       const matchingTheme = [...elements.themeSelect.options].find((option) => option.value.toLowerCase() === settings.backgroundColor);
       elements.themeSelect.value = matchingTheme ? matchingTheme.value : settings.backgroundColor;
+      if (elements.backgroundPalettePreview) {
+        elements.backgroundPalettePreview.style.background = settings.backgroundColor || "#071322";
+      }
     };
 
     const autoSaveWorkspace = (message = "") => {
@@ -1065,6 +1138,83 @@
       return item;
     };
 
+    const createLevelThumbnail = (level) => {
+      const canvas = document.createElement("canvas");
+      canvas.className = "community-level-thumbnail";
+      canvas.width = 320;
+      canvas.height = 118;
+      canvas.setAttribute("aria-hidden", "true");
+
+      const context = canvas.getContext("2d");
+      if (!context) {
+        return canvas;
+      }
+
+      const data = getCommunityLevelData(level);
+      const width = canvas.width;
+      const height = canvas.height;
+      const groundY = height - 18;
+      const viewportHeight = window.TechnoDash.Level.getViewportSize().height;
+      const scaleX = width / Math.max(data.length, window.TechnoDash.Level.getTileSize());
+      const scaleY = (groundY - 8) / viewportHeight;
+      context.fillStyle = data.settings.backgroundColor || "#071322";
+      context.fillRect(0, 0, width, height);
+      context.fillStyle = "rgba(244, 247, 251, 0.08)";
+      for (let x = 0; x < width; x += 24) {
+        context.fillRect(x, 0, 1, groundY);
+      }
+      context.fillStyle = "#2f3747";
+      context.fillRect(0, groundY, width, height - groundY);
+      context.fillStyle = "#f0c04a";
+      context.fillRect(0, groundY - 2, width, 3);
+
+      data.decorations.slice(0, 18).forEach((decoration) => {
+        const x = decoration.x * scaleX;
+        const objectHeight = Math.max(6, decoration.height * scaleY);
+        const objectWidth = Math.max(5, decoration.width * scaleX);
+        context.fillStyle = "rgba(96, 165, 250, 0.22)";
+        context.fillRect(x - objectWidth / 2, groundY - decoration.y * scaleY - objectHeight, objectWidth, objectHeight);
+      });
+
+      data.obstacles.slice(0, 80).forEach((obstacle) => {
+        const x = obstacle.x * scaleX;
+        const objectHeight = Math.max(4, obstacle.height * scaleY);
+        const objectWidth = Math.max(3, obstacle.width * scaleX);
+        const bottom = groundY - obstacle.y * scaleY;
+        if (obstacle.type === "finish") {
+          context.fillStyle = "#f4f7fb";
+          context.fillRect(x - 1, 4, 2, groundY - 4);
+          context.fillStyle = "#111827";
+          context.fillRect(x - objectWidth / 2, bottom - objectHeight, objectWidth, objectHeight);
+          return;
+        }
+
+        if (window.TechnoDash.Level.isHazardType(obstacle.type)) {
+          context.fillStyle = "#ef4444";
+        } else if (window.TechnoDash.Level.isModifierType(obstacle.type)) {
+          context.fillStyle = "#8b5cf6";
+        } else if (window.TechnoDash.Level.isPlatformType(obstacle.type)) {
+          context.fillStyle = "#35b6a6";
+        } else {
+          context.fillStyle = "#5aa7e8";
+        }
+
+        if (obstacle.type === "triangle" || obstacle.type === "animatedSpike") {
+          context.beginPath();
+          context.moveTo(x, bottom - objectHeight);
+          context.lineTo(x - objectWidth / 2, bottom);
+          context.lineTo(x + objectWidth / 2, bottom);
+          context.closePath();
+          context.fill();
+          return;
+        }
+
+        context.fillRect(x - objectWidth / 2, bottom - objectHeight, objectWidth, objectHeight);
+      });
+
+      return canvas;
+    };
+
     const createCommunityLevelCard = (level, options = {}) => {
       const card = document.createElement("article");
       card.className = "community-level-card";
@@ -1113,7 +1263,7 @@
       playButton.textContent = "Play";
       actions.appendChild(playButton);
 
-      card.append(title, stats, actions);
+      card.append(createLevelThumbnail(level), title, stats, actions);
       return card;
     };
 
@@ -1327,7 +1477,7 @@
       }
     };
 
-    const startCommunityLevel = (level) => {
+    const startCommunityLevel = async (level) => {
       const levelId = String(level && level.id ? level.id : "");
       if (communitySessionLevelId !== levelId) {
         communitySessionLevelId = levelId;
@@ -1355,11 +1505,12 @@
       }
       updateCommunityGameInfo();
       setActiveView("game");
-      ensureGame();
       updateGameChrome("community", level.name || "Community level");
       hideValidationSuccessFeedback();
       closeCommunityClearModal();
       setWorkspaceMessage(`Playing ${level.name || "community level"}`);
+      await preloadLevelAssets(levelData);
+      ensureGame();
 
       const loadCommunityRun = () => {
         if (!gameScene) {
@@ -1612,10 +1763,11 @@
     const ensureGame = () => {
       const levelData = syncCurrentLevelFromEditor();
       if (game || !window.Phaser) {
+        applyGamePerformanceProfile();
         return;
       }
 
-      const performanceProfile = getGamePerformanceProfile();
+      const performanceProfile = applyGamePerformanceProfile();
 
       gameScene = new window.TechnoDash.GameScene();
       gameScene.setPerformanceProfile(performanceProfile.scene);
@@ -1699,13 +1851,14 @@
       setWorkspaceMessage("Back to editor");
     };
 
-    const startTest = () => {
+    const startTest = async () => {
       const levelData = syncCurrentLevelFromEditor();
       activateMode("test");
-      ensureGame();
       updateGameChrome("test");
       hideValidationSuccessFeedback();
       setWorkspaceMessage("Testing level");
+      await preloadLevelAssets(levelData);
+      ensureGame();
 
       const loadTestRun = () => {
         if (!gameScene) {
@@ -1722,11 +1875,10 @@
       }
     };
 
-    const startValidation = () => {
+    const startValidation = async () => {
       const levelData = syncCurrentLevelFromEditor();
       const hasFinish = levelHasFinish(levelData);
       activateMode("validation");
-      ensureGame();
       validationSuccessDismissed = false;
       hideValidationSuccessFeedback();
       if (elements.shareValidationRunButton) {
@@ -1751,6 +1903,8 @@
         setValidationState("failed", "Add a finish line before publishing.");
         setWorkspaceMessage("Testing level. Finish line missing for validation.");
       }
+      await preloadLevelAssets(levelData);
+      ensureGame();
 
       const loadValidationRun = () => {
         if (!gameScene) {
@@ -2113,13 +2267,16 @@
       zoomRatio = Math.min(1.75, zoomRatio + 0.25);
       syncZoom();
     });
-    elements.gridSizeSelect.addEventListener("change", () => {
-      if (levelEditor && typeof levelEditor.setGridSize === "function") {
-        levelEditor.setGridSize(Number(elements.gridSizeSelect.value));
-      }
-    });
     elements.paletteTabs.forEach((button) => {
-      button.addEventListener("click", () => setPaletteTab(button.dataset.paletteTab));
+      button.addEventListener("click", () => {
+        const layer = button.dataset.paletteTab;
+        if (levelEditor && ["gameplay", "decor", "background"].includes(layer)) {
+          levelEditor.setActiveLayer(layer);
+          return;
+        }
+
+        setPaletteTab(layer);
+      });
     });
     elements.panelToggles.forEach((button) => {
       button.addEventListener("click", () => togglePanel(button));
@@ -2128,6 +2285,12 @@
       updatePropertyOutputs();
       openModal(elements.propertiesModal);
     });
+    if (elements.backgroundPaletteButton) {
+      elements.backgroundPaletteButton.addEventListener("click", () => {
+        updatePropertyOutputs();
+        openModal(elements.propertiesModal);
+      });
+    }
     elements.closePropertiesButton.addEventListener("click", () => closeModal(elements.propertiesModal));
     elements.closePublishModalButton.addEventListener("click", () => closeModal(elements.publishModal));
     elements.cancelPublishButton.addEventListener("click", () => closeModal(elements.publishModal));
