@@ -58,6 +58,12 @@
       this.adaptiveQualityLevel = 0;
       this.slowFrameMs = 0;
       this.fastFrameMs = 0;
+      this.inputListenersAttached = false;
+      this.handleGlobalKeydown = null;
+      this.handleGlobalKeyup = null;
+      this.handleGlobalBlur = null;
+      this.handleGlobalVisibilityChange = null;
+      this.handleGlobalPageHide = null;
     }
 
     static createProgramFeatures(programState) {
@@ -180,15 +186,13 @@
       this.effectsGraphics.setDepth(12);
       this.player = new window.TechnoDash.Player(this, this.playerX, this.groundY, this.ceilingY);
       this.syncProgramVisuals();
-      this.handleGlobalKeydown = (event) => this.onGlobalKeydown(event);
-      this.handleGlobalKeyup = (event) => this.onGlobalKeyup(event);
-      window.addEventListener("keydown", this.handleGlobalKeydown);
-      window.addEventListener("keyup", this.handleGlobalKeyup);
-      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-        window.removeEventListener("keydown", this.handleGlobalKeydown);
-        window.removeEventListener("keyup", this.handleGlobalKeyup);
+      this.attachGlobalInputListeners();
+      const disposeSceneResources = () => {
+        this.detachGlobalInputListeners();
         this.clearDecorationSprites();
-      });
+      };
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, disposeSceneResources);
+      this.events.once(Phaser.Scenes.Events.DESTROY || "destroy", disposeSceneResources);
 
       this.created = true;
       const levelLoadToken = this.levelLoadToken;
@@ -205,6 +209,44 @@
     setCallbacks(callbacks) {
       this.uiCallbacks = callbacks || {};
       this.publishState({ force: true });
+    }
+
+    attachGlobalInputListeners() {
+      if (this.inputListenersAttached) {
+        return;
+      }
+
+      this.handleGlobalKeydown = (event) => this.onGlobalKeydown(event);
+      this.handleGlobalKeyup = (event) => this.onGlobalKeyup(event);
+      this.handleGlobalBlur = () => this.resetInputState();
+      this.handleGlobalVisibilityChange = () => {
+        if (document.hidden) {
+          this.resetInputState();
+        }
+      };
+      this.handleGlobalPageHide = () => this.resetInputState();
+
+      window.addEventListener("keydown", this.handleGlobalKeydown);
+      window.addEventListener("keyup", this.handleGlobalKeyup);
+      window.addEventListener("blur", this.handleGlobalBlur);
+      window.addEventListener("pagehide", this.handleGlobalPageHide);
+      document.addEventListener("visibilitychange", this.handleGlobalVisibilityChange);
+      this.inputListenersAttached = true;
+    }
+
+    detachGlobalInputListeners() {
+      if (!this.inputListenersAttached) {
+        this.resetInputState();
+        return;
+      }
+
+      window.removeEventListener("keydown", this.handleGlobalKeydown);
+      window.removeEventListener("keyup", this.handleGlobalKeyup);
+      window.removeEventListener("blur", this.handleGlobalBlur);
+      window.removeEventListener("pagehide", this.handleGlobalPageHide);
+      document.removeEventListener("visibilitychange", this.handleGlobalVisibilityChange);
+      this.inputListenersAttached = false;
+      this.resetInputState();
     }
 
     setPerformanceProfile(profile = {}) {
@@ -395,9 +437,7 @@
       this.endPlayerHidden = false;
       this.spaceWasDown = false;
       this.restartWasDown = false;
-      this.clearJumpRequest();
-      this.restartQueued = false;
-      this.frameHadJumpPress = false;
+      this.resetInputState();
       this.lastGroundedTime = this.getCurrentTimeMs();
       this.staticWorldDirty = true;
       this.player.reset(this.getRuntimeSettings());
@@ -522,10 +562,12 @@
     }
 
     restartFromInput(restartDown) {
+      const spaceDown = Boolean(this.keyState.space);
       this.restartQueued = false;
       this.reset(true);
       this.restartWasDown = Boolean(restartDown);
-      this.spaceWasDown = Boolean(this.keyState.space);
+      this.spaceWasDown = spaceDown;
+      this.keyState.space = spaceDown;
       this.clearJumpRequest();
     }
 
@@ -789,6 +831,15 @@
       this.keyState.space = false;
       this.keyState.enter = false;
       this.keyState.r = false;
+    }
+
+    resetInputState() {
+      this.clearKeyState();
+      this.spaceWasDown = false;
+      this.restartWasDown = false;
+      this.clearJumpRequest();
+      this.restartQueued = false;
+      this.frameHadJumpPress = false;
     }
 
     shouldIgnoreKeyboardEvent(event) {

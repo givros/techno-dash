@@ -4,6 +4,7 @@
     const legacyAutosaveKey = "technodash-workshop-autosave";
     const ratedLevelsKey = "dash-maker-rated-levels";
     const ratingVoterKey = "dash-maker-rating-voter-id";
+    const lastViewKey = "dash-maker-last-view";
     const defaultLevelName = "My level 1";
     const defaultSettings = window.TechnoDash.Level.getDefaultData().settings;
     const supabase = new window.TechnoDash.SupabaseManager({
@@ -235,6 +236,23 @@
       }
     };
 
+    const readSavedView = () => {
+      try {
+        return localStorage.getItem(lastViewKey) === "editor" ? "editor" : "home";
+      } catch (error) {
+        console.warn("Saved view is unreadable", error);
+        return "home";
+      }
+    };
+
+    const saveLastView = (viewName) => {
+      try {
+        localStorage.setItem(lastViewKey, viewName === "editor" ? "editor" : "home");
+      } catch (error) {
+        console.warn("Last view could not be saved", error);
+      }
+    };
+
     const readRatedLevels = () => {
       try {
         const parsed = JSON.parse(localStorage.getItem(ratedLevelsKey) || "{}");
@@ -272,6 +290,7 @@
     };
 
     const savedWorkspace = readSavedWorkspace();
+    const savedInitialView = readSavedView();
     let ratedLevels = readRatedLevels();
     let currentLevelData = savedWorkspace ? savedWorkspace.level : window.TechnoDash.Level.getDefaultData();
     let currentLevelName = savedWorkspace ? savedWorkspace.levelName : defaultLevelName;
@@ -1351,6 +1370,9 @@
 
     const unloadGame = () => {
       if (gameScene) {
+        if (typeof gameScene.detachGlobalInputListeners === "function") {
+          gameScene.detachGlobalInputListeners();
+        }
         gameScene.stop();
         gameScene.setCallbacks(null);
       }
@@ -1370,6 +1392,7 @@
     };
 
     const showHome = () => {
+      saveLastView("home");
       unloadGame();
       document.body.classList.add("is-community-home");
       window.scrollTo(0, 0);
@@ -1390,6 +1413,7 @@
         return;
       }
 
+      saveLastView("editor");
       document.body.classList.remove("is-community-home");
       window.scrollTo(0, 0);
       activeCommunityLevel = null;
@@ -1478,6 +1502,7 @@
     };
 
     const startCommunityLevel = async (level) => {
+      saveLastView("home");
       const levelId = String(level && level.id ? level.id : "");
       if (communitySessionLevelId !== levelId) {
         communitySessionLevelId = levelId;
@@ -1848,6 +1873,7 @@
       }
 
       activateMode("create");
+      saveLastView("editor");
       setWorkspaceMessage("Back to editor");
     };
 
@@ -2360,6 +2386,10 @@
     }, true);
 
     syncZoom();
-    showHome();
+    if (savedInitialView === "editor" && !isMobileEditorLocked()) {
+      openEditor();
+    } else {
+      showHome();
+    }
   });
 })();
