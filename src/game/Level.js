@@ -266,7 +266,6 @@
           label: "Actions",
           tools: [
             { type: "jumpPad", label: "Jump pad", note: "auto" },
-            { type: "jumpOrb", label: "Jump orb", note: "tap" },
             { type: "trampolineBlock", label: "Trampoline", note: "bounce" },
             { type: "breakableBlock", label: "Break", note: "crack" }
           ]
@@ -364,8 +363,7 @@
         "speedPortal",
         "slowZone",
         "fastZone",
-        "jumpPad",
-        "jumpOrb"
+        "jumpPad"
       ];
     }
 

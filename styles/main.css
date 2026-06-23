@@ -1459,7 +1459,6 @@ button:disabled {
 .tool-swatch[data-type="oneWayPlatform"]::before,
 .tool-swatch[data-type="movingPlatform"]::before,
 .tool-swatch[data-type="jumpPad"]::before,
-.tool-swatch[data-type="jumpOrb"]::before,
 .tool-swatch[data-type="gravityUpPortal"]::before,
 .tool-swatch[data-type="gravityDownPortal"]::before,
 .tool-swatch[data-type="gravityUpZone"]::before,
@@ -1480,7 +1479,6 @@ button:disabled {
 .tool-swatch[data-type="oneWayPlatform"],
 .tool-swatch[data-type="movingPlatform"],
 .tool-swatch[data-type="jumpPad"],
-.tool-swatch[data-type="jumpOrb"],
 .tool-swatch[data-type="gravityUpPortal"],
 .tool-swatch[data-type="gravityDownPortal"],
 .tool-swatch[data-type="gravityUpZone"],
@@ -1544,22 +1542,9 @@ button:disabled {
 }
 
 .tool-swatch[data-type="jumpPad"],
-.tool-swatch[data-type="jumpOrb"],
 .tool-swatch[data-type="trampolineBlock"] {
   border-color: #fed7aa;
   background: #f97316;
-}
-
-.tool-swatch[data-type="jumpOrb"] {
-  border-radius: 999px;
-}
-
-.tool-swatch[data-type="jumpOrb"]::after {
-  content: "";
-  position: absolute;
-  inset: 7px;
-  border: 2px solid #f4f7fb;
-  border-radius: 999px;
 }
 
 .tool-swatch[data-type="slipperyBlock"] {
@@ -2421,14 +2406,9 @@ button:disabled {
 }
 
 .tool-cursor-shape[data-type="jumpPad"],
-.tool-cursor-shape[data-type="jumpOrb"],
 .tool-cursor-shape[data-type="trampolineBlock"] {
   border-color: #fed7aa;
   background: #f97316;
-}
-
-.tool-cursor-shape[data-type="jumpOrb"] {
-  border-radius: 999px;
 }
 
 .tool-cursor-shape[data-type="slipperyBlock"] {
@@ -2910,16 +2890,9 @@ button:disabled {
 }
 
 .grid-obstacle[data-type="jumpPad"],
-.grid-preview[data-type="jumpPad"],
-.grid-obstacle[data-type="jumpOrb"],
-.grid-preview[data-type="jumpOrb"] {
+.grid-preview[data-type="jumpPad"] {
   border-color: #fed7aa;
   background: #f97316;
-}
-
-.grid-obstacle[data-type="jumpOrb"],
-.grid-preview[data-type="jumpOrb"] {
-  border-radius: 999px;
 }
 
 .grid-obstacle[data-type="laser"],
@@ -3788,6 +3761,11 @@ button:disabled {
   font-size: 13px;
   line-height: 1.35;
   text-align: center;
+}
+
+.validation-box[data-state="failed"] p {
+  color: #ffb4bb;
+  font-weight: 900;
 }
 
 .validation-details {

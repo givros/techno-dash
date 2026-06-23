@@ -18,7 +18,11 @@
       this.jumpQueued = false;
       this.jumpQueuedAt = 0;
       this.jumpQueuedFrameId = 0;
+      this.jumpLockedUntil = 0;
       this.restartQueued = false;
+      this.restartQueuedInput = "";
+      this.restartLockedUntil = 0;
+      this.restartHeldAtEnd = { space: false, enter: false, r: false };
       this.jumpBufferMs = 120;
       this.coyoteMs = 70;
       this.maxFrameDeltaMs = 50;
@@ -442,6 +446,9 @@
       }
 
       if (this.ended) {
+        if (this.isRestartInputLocked()) {
+          return;
+        }
         this.reset(true);
         return;
       }
@@ -478,6 +485,10 @@
       this.endPlayerHidden = false;
       this.spaceWasDown = false;
       this.restartWasDown = false;
+      this.restartQueuedInput = "";
+      this.restartLockedUntil = 0;
+      this.jumpLockedUntil = 0;
+      this.clearRestartHeldInputs();
       this.resetInputState();
       this.lastGroundedTime = this.getCurrentTimeMs();
       this.staticWorldDirty = true;
@@ -506,12 +517,22 @@
         this.clearKeyState();
       }
 
-      const restartDown = keyboardBlocked
-        ? false
-        : this.keyState.r || this.keyState.enter || (this.ended && this.keyState.space);
-      const restartTriggered = (restartDown && !this.restartWasDown) || this.restartQueued;
+      this.updateRestartInputLock(time);
+
+      const restartInput = keyboardBlocked ? "" : this.getActiveRestartInputId();
+      const restartDown = Boolean(restartInput);
+      const queuedRestartReady = this.restartQueued
+        && this.canAcceptRestartInput(this.restartQueuedInput, time);
+      if (this.restartQueued && !queuedRestartReady && this.isRestartCooldownLocked(time)) {
+        this.restartQueued = false;
+        this.restartQueuedInput = "";
+      }
+      const edgeRestartReady = restartDown
+        && !this.restartWasDown
+        && this.canAcceptRestartInput(restartInput, time);
+      const restartTriggered = edgeRestartReady || queuedRestartReady;
       if (restartTriggered) {
-        this.restartFromInput(restartDown);
+        this.restartFromInput(restartDown, queuedRestartReady ? this.restartQueuedInput : restartInput);
         return;
       }
       this.restartQueued = false;
@@ -602,9 +623,16 @@
       this.publishState({ time });
     }
 
-    restartFromInput(restartDown) {
+    restartFromInput(restartDown, inputId = "") {
+      if (this.ended && !this.canAcceptRestartInput(inputId)) {
+        this.restartQueued = false;
+        this.restartQueuedInput = "";
+        return;
+      }
+
       const spaceDown = Boolean(this.keyState.space);
       this.restartQueued = false;
+      this.restartQueuedInput = "";
       this.reset(true);
       this.restartWasDown = Boolean(restartDown);
       this.spaceWasDown = spaceDown;
@@ -618,19 +646,24 @@
       }
 
       if (this.ended) {
-        this.restartQueued = true;
+        this.queueRestart("pointer");
         return;
       }
 
       this.requestJump(this.getCurrentTimeMs());
     }
 
-    queueRestart() {
+    queueRestart(inputId = "button") {
       if (!this.created) {
         return;
       }
 
+      if (this.ended && !this.canAcceptRestartInput(inputId)) {
+        return;
+      }
+
       this.restartQueued = true;
+      this.restartQueuedInput = inputId;
     }
 
     getCurrentTimeMs() {
@@ -643,9 +676,14 @@
     }
 
     requestJump(timeMs = this.getCurrentTimeMs()) {
+      if (this.isJumpInputLocked(timeMs)) {
+        return false;
+      }
+
       this.jumpQueued = true;
       this.jumpQueuedAt = Number.isFinite(timeMs) ? timeMs : this.getCurrentTimeMs();
       this.jumpQueuedFrameId = this.updateFrameId;
+      return true;
     }
 
     clearJumpRequest() {
@@ -676,6 +714,10 @@
       return timeMs - this.lastGroundedTime <= this.coyoteMs;
     }
 
+    isJumpInputLocked(timeMs = this.getCurrentTimeMs()) {
+      return Number.isFinite(this.jumpLockedUntil) && timeMs < this.jumpLockedUntil;
+    }
+
     getInputContext(timeMs = this.getCurrentTimeMs()) {
       return {
         spacePressed: this.frameHadJumpPress || this.hasBufferedJump(timeMs),
@@ -685,6 +727,11 @@
 
     tryRunBufferedJump(settings, timeMs = this.getCurrentTimeMs()) {
       if (!this.programFeatures.player || !this.hasBufferedJump(timeMs)) {
+        return false;
+      }
+
+      if (this.isJumpInputLocked(timeMs)) {
+        this.clearJumpRequest();
         return false;
       }
 
@@ -820,7 +867,7 @@
         this.keyState.space = true;
         event.preventDefault();
         if (this.ended && !event.repeat) {
-          this.restartQueued = true;
+          this.queueRestart("space");
         } else if (!event.repeat) {
           this.requestJump(this.getCurrentTimeMs());
         }
@@ -841,7 +888,7 @@
         }
         event.preventDefault();
         if (!event.repeat) {
-          this.restartQueued = true;
+          this.queueRestart(isEnter ? "enter" : "r");
         }
       }
     }
@@ -849,6 +896,7 @@
     onGlobalKeyup(event) {
       if (event.code === "Space" || event.key === " ") {
         this.keyState.space = false;
+        this.restartHeldAtEnd.space = false;
         return;
       }
 
@@ -860,11 +908,13 @@
         || event.which === 13;
       if (isEnter) {
         this.keyState.enter = false;
+        this.restartHeldAtEnd.enter = false;
         return;
       }
 
       if (event.code === "KeyR" || event.key === "r" || event.key === "R") {
         this.keyState.r = false;
+        this.restartHeldAtEnd.r = false;
       }
     }
 
@@ -880,7 +930,79 @@
       this.restartWasDown = false;
       this.clearJumpRequest();
       this.restartQueued = false;
+      this.restartQueuedInput = "";
       this.frameHadJumpPress = false;
+    }
+
+    clearRestartHeldInputs() {
+      this.restartHeldAtEnd.space = false;
+      this.restartHeldAtEnd.enter = false;
+      this.restartHeldAtEnd.r = false;
+    }
+
+    captureRestartHeldInputs() {
+      this.restartHeldAtEnd.space = Boolean(this.keyState.space);
+      this.restartHeldAtEnd.enter = Boolean(this.keyState.enter);
+      this.restartHeldAtEnd.r = Boolean(this.keyState.r);
+    }
+
+    getActiveRestartInputId() {
+      if (this.keyState.r) {
+        return "r";
+      }
+
+      if (this.keyState.enter) {
+        return "enter";
+      }
+
+      if (this.ended && this.keyState.space) {
+        return "space";
+      }
+
+      return "";
+    }
+
+    updateRestartInputLock(timeMs = this.getCurrentTimeMs()) {
+      if (!this.ended) {
+        this.clearRestartHeldInputs();
+        return;
+      }
+
+      if (this.restartHeldAtEnd.space && !this.keyState.space) {
+        this.restartHeldAtEnd.space = false;
+      }
+      if (this.restartHeldAtEnd.enter && !this.keyState.enter) {
+        this.restartHeldAtEnd.enter = false;
+      }
+      if (this.restartHeldAtEnd.r && !this.keyState.r) {
+        this.restartHeldAtEnd.r = false;
+      }
+    }
+
+    isRestartCooldownLocked(timeMs = this.getCurrentTimeMs()) {
+      return this.ended && timeMs < this.restartLockedUntil;
+    }
+
+    canAcceptRestartInput(inputId = "", timeMs = this.getCurrentTimeMs()) {
+      if (!this.ended) {
+        return true;
+      }
+
+      this.updateRestartInputLock(timeMs);
+      if (this.isRestartCooldownLocked(timeMs)) {
+        return false;
+      }
+
+      return !inputId || !this.restartHeldAtEnd[inputId];
+    }
+
+    isRestartInputLocked(timeMs = this.getCurrentTimeMs()) {
+      if (!this.ended) {
+        return false;
+      }
+
+      this.updateRestartInputLock(timeMs);
+      return this.isRestartCooldownLocked(timeMs);
     }
 
     shouldIgnoreKeyboardEvent(event) {
@@ -1023,7 +1145,7 @@
       }
 
       const screenObjects = this.getFrameScreenObjects();
-      const platform = window.TechnoDash.CollisionManager.findPlatformLanding(
+      const verticalCollision = window.TechnoDash.CollisionManager.findVerticalSurfaceCollision(
         this.player.getBounds(),
         previousPlayerBounds,
         screenObjects,
@@ -1031,23 +1153,34 @@
         this.player.gravityDirection
       );
 
-      if (platform) {
-        const surfaceY = this.player.gravityDirection === -1 ? platform.bottom : platform.top;
-        this.player.landOn(surfaceY, this.player.gravityDirection);
+      if (verticalCollision) {
+        const platform = verticalCollision.object;
+        if (verticalCollision.kind === "landing") {
+          this.player.landOn(verticalCollision.surfaceY, this.player.gravityDirection);
+        } else {
+          this.player.blockAt(verticalCollision.surfaceY, verticalCollision.placementDirection);
+        }
+
         if (platform.type === "trampolineBlock") {
           this.forcePlayerJump(1.28);
         }
-        if (platform.type === "breakableBlock") {
+        if (verticalCollision.kind === "landing" && platform.type === "breakableBlock") {
           this.disabledObjectIds.add(platform.id);
           this.invalidateFrameCache();
         }
-        return true;
+        return verticalCollision.kind === "landing";
       }
 
       return false;
     }
 
-    applyGravitySwitches() {
+    onGravityDirectionChanged(timeMs = this.getCurrentTimeMs()) {
+      this.clearJumpRequest();
+      this.jumpLockedUntil = Math.max(this.jumpLockedUntil || 0, timeMs + 120);
+      this.lastGroundedTime = timeMs - this.coyoteMs - 1;
+    }
+
+    applyGravitySwitches(timeMs = this.getCurrentTimeMs()) {
       if (!this.programFeatures.obstacles || !this.player) {
         return false;
       }
@@ -1061,9 +1194,10 @@
       }
 
       this.activatedGravitySwitchIds.add(gravitySwitch.id);
-      this.player.flipGravity();
+      if (this.player.flipGravity()) {
+        this.onGravityDirectionChanged(timeMs);
+      }
       this.showGravityFeedback();
-      this.lastGroundedTime = this.getCurrentTimeMs();
       return true;
     }
 
@@ -1072,7 +1206,7 @@
         return false;
       }
 
-      let changed = this.applyGravitySwitches();
+      let changed = this.applyGravitySwitches(timeMs);
       const playerBounds = this.player.getBounds();
       const screenObjects = this.getFrameScreenObjects();
 
@@ -1089,6 +1223,7 @@
             this.activatedObjectIds.add(forcedGravity.id);
           }
           if (this.player.setGravityDirection(nextDirection)) {
+            this.onGravityDirectionChanged(timeMs);
             this.showGravityFeedback();
             changed = true;
           }
@@ -1108,13 +1243,6 @@
       if (jumpPad && !this.activatedObjectIds.has(jumpPad.id)) {
         this.activatedObjectIds.add(jumpPad.id);
         this.forcePlayerJump(1.18);
-        changed = true;
-      }
-
-      const jumpOrb = window.TechnoDash.CollisionManager.findOverlappingObjects(playerBounds, screenObjects, "jumpOrb")[0];
-      if (jumpOrb && this.hasBufferedJump(timeMs) && !this.activatedObjectIds.has(`${jumpOrb.id}-${Math.floor(timeMs / 160)}`)) {
-        this.activatedObjectIds.add(`${jumpOrb.id}-${Math.floor(timeMs / 160)}`);
-        this.forcePlayerJump(1.05);
         changed = true;
       }
 
@@ -1244,9 +1372,23 @@
     }
 
     endGame(status) {
+      if (this.ended) {
+        return;
+      }
+
       this.running = false;
       this.ended = true;
       this.status = status;
+      this.clearJumpRequest();
+      this.restartQueued = false;
+      this.restartQueuedInput = "";
+      if (status === "Game Over") {
+        this.restartLockedUntil = this.getCurrentTimeMs() + 360;
+        this.captureRestartHeldInputs();
+      } else {
+        this.restartLockedUntil = this.getCurrentTimeMs() + 120;
+        this.clearRestartHeldInputs();
+      }
       this.playEndAnimation(status);
       this.triggerHaptic(status === "Game Over" ? 42 : 24);
       this.renderWorld();
@@ -1716,11 +1858,7 @@
         return;
       }
 
-      const up = object.type.includes("Up") || object.type === "jumpPad" || object.type === "jumpOrb";
-      if (object.type === "jumpOrb") {
-        graphics.lineStyle(2, 0xf4f7fb, 0.92);
-        graphics.strokeCircle(centerX, centerY, 10);
-      }
+      const up = object.type.includes("Up") || object.type === "jumpPad";
       graphics.fillTriangle(
         centerX,
         up ? object.top + 7 : object.bottom - 7,

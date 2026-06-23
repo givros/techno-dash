@@ -60,40 +60,105 @@
     }
 
     static findPlatformLanding(playerBounds, previousBounds, screenObjects, velocityY, gravityDirection = 1) {
-      if (velocityY * gravityDirection < 0) {
-        return null;
-      }
+      const collision = CollisionManager.findVerticalSurfaceCollision(
+        playerBounds,
+        previousBounds,
+        screenObjects,
+        velocityY,
+        gravityDirection
+      );
+      return collision && collision.kind === "landing" ? collision.object : null;
+    }
 
-      let landing = null;
+    static findVerticalSurfaceCollision(playerBounds, previousBounds, screenObjects, velocityY, gravityDirection = 1) {
+      const tolerance = 8;
+      const movingDown = velocityY > 0 || playerBounds.bottom >= previousBounds.bottom;
+      const movingUp = velocityY < 0 || playerBounds.top <= previousBounds.top;
+      let collision = null;
+
       screenObjects.forEach((object) => {
         if (!CollisionManager.isLandingSurface(object)) {
           return;
         }
 
-        if (playerBounds.right <= object.left + 4 || playerBounds.left >= object.right - 4) {
+        if (!CollisionManager.hasMeaningfulHorizontalOverlap(playerBounds, object)) {
           return;
         }
 
+        const canBlockOppositeFace = CollisionManager.isSolidBlock(object);
         if (gravityDirection === -1) {
-          if (previousBounds.top < object.bottom - 8 || playerBounds.top > object.bottom) {
+          if (
+            movingUp
+            && previousBounds.top >= object.bottom - tolerance
+            && playerBounds.top <= object.bottom
+          ) {
+            if (!collision || collision.kind !== "landing" || object.bottom > collision.surfaceY) {
+              collision = {
+                kind: "landing",
+                object,
+                surfaceY: object.bottom,
+                placementDirection: -1
+              };
+            }
             return;
           }
 
-          if (!landing || object.bottom > landing.bottom) {
-            landing = object;
+          if (
+            canBlockOppositeFace
+            && movingDown
+            && previousBounds.bottom <= object.top + tolerance
+            && playerBounds.bottom >= object.top
+          ) {
+            if (!collision || (collision.kind !== "landing" && object.top < collision.surfaceY)) {
+              collision = {
+                kind: "block",
+                object,
+                surfaceY: object.top,
+                placementDirection: 1
+              };
+            }
           }
-        } else {
-          if (previousBounds.bottom > object.top + 8 || playerBounds.bottom < object.top) {
-            return;
-          }
+          return;
+        }
 
-          if (!landing || object.top < landing.top) {
-            landing = object;
+        if (
+          movingDown
+          && previousBounds.bottom <= object.top + tolerance
+          && playerBounds.bottom >= object.top
+        ) {
+          if (!collision || collision.kind !== "landing" || object.top < collision.surfaceY) {
+            collision = {
+              kind: "landing",
+              object,
+              surfaceY: object.top,
+              placementDirection: 1
+            };
+          }
+          return;
+        }
+
+        if (
+          canBlockOppositeFace
+          && movingUp
+          && previousBounds.top >= object.bottom - tolerance
+          && playerBounds.top <= object.bottom
+        ) {
+          if (!collision || (collision.kind !== "landing" && object.bottom > collision.surfaceY)) {
+            collision = {
+              kind: "block",
+              object,
+              surfaceY: object.bottom,
+              placementDirection: -1
+            };
           }
         }
       });
 
-      return landing;
+      return collision;
+    }
+
+    static hasMeaningfulHorizontalOverlap(playerBounds, object) {
+      return playerBounds.right > object.left + 4 && playerBounds.left < object.right - 4;
     }
 
     static findSolidBlockSideCollision(playerBounds, screenObjects, gravityDirection = 1) {

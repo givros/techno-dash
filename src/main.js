@@ -590,6 +590,8 @@
       levelData.obstacles.some((obstacle) => obstacle.type === "finish")
     );
 
+    const missingFinishValidationMessage = "Add a Finish block before validating the level.";
+
     const setValidationState = (state, message, distance = 0) => {
       elements.validationBox.dataset.state = state;
       elements.validationMessage.textContent = message;
@@ -649,6 +651,16 @@
       }
     };
 
+    const focusValidationSuccessScreen = () => {
+      const successScreen = ensureValidationSuccessScreen();
+      if (!successScreen) {
+        return;
+      }
+
+      successScreen.tabIndex = -1;
+      successScreen.focus({ preventScroll: true });
+    };
+
     const ensureValidationSuccessScreen = () => {
       if (elements.validationSuccessScreen) {
         bindValidationSuccessActions();
@@ -659,6 +671,10 @@
       screen.id = "validation-success-screen";
       screen.className = "validation-success-screen";
       screen.hidden = true;
+      screen.tabIndex = -1;
+      screen.setAttribute("role", "dialog");
+      screen.setAttribute("aria-modal", "true");
+      screen.setAttribute("aria-labelledby", "validation-success-title");
       screen.setAttribute("aria-live", "assertive");
       screen.innerHTML = [
         "<section class=\"validation-success-screen-card\">",
@@ -709,6 +725,7 @@
       }
       const successScreen = ensureValidationSuccessScreen();
       successScreen.hidden = false;
+      window.setTimeout(focusValidationSuccessScreen, 0);
       if (elements.validationRunPanel && gameRunMode === "validation") {
         elements.validationRunPanel.hidden = false;
         elements.validationRunPanel.dataset.state = "passed";
@@ -729,6 +746,9 @@
       autoSaveWorkspace("Level validated");
       if (gameScene) {
         gameScene.stop();
+        if (typeof gameScene.resetInputState === "function") {
+          gameScene.resetInputState();
+        }
       }
       validationSuccessDismissed = false;
       if (validationSuccessTimer) {
@@ -1724,6 +1744,36 @@
 
     const hasBlockingModalOpen = () => getBlockingModals().some((modal) => modal && !modal.hidden);
 
+    const shouldBlockValidatedRunRestart = () => gameRunMode === "validation" && validationPassed;
+
+    const blockValidatedRunRestart = (event) => {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof event.stopImmediatePropagation === "function") {
+          event.stopImmediatePropagation();
+        }
+      }
+      setWorkspaceMessage("Level already validated. Publish it or go back to editor.");
+    };
+
+    const isKeyboardActivationEvent = (event) => event
+      && (event.code === "Space"
+        || event.key === " "
+        || event.code === "Enter"
+        || event.code === "NumpadEnter"
+        || event.key === "Enter"
+        || event.key === "Return");
+
+    const isKeyboardTriggeredClick = (event) => event && event.type === "click" && event.detail === 0;
+
+    const shouldBlockValidatedRunRestartEvent = (event) => shouldBlockValidatedRunRestart()
+      && (isKeyboardActivationEvent(event) || isKeyboardTriggeredClick(event));
+
+    const isValidationSuccessActionTarget = (target) => Boolean(target
+      && typeof target.closest === "function"
+      && target.closest("#share-validated-level-button, #close-validation-success-button, #share-validation-run-button"));
+
     const isTypingTarget = (target) => {
       if (!target || typeof target.closest !== "function") {
         return false;
@@ -1910,31 +1960,44 @@
     const startValidation = async () => {
       const levelData = syncCurrentLevelFromEditor();
       const hasFinish = levelHasFinish(levelData);
+      if (!hasFinish) {
+        validationActive = false;
+        validationCheckRequested = false;
+        validationPassed = false;
+        validatedLevelData = null;
+        validationSuccessDismissed = true;
+        hideValidationSuccessFeedback();
+        updateValidationBadge();
+        if (elements.validationStatusBadge) {
+          elements.validationStatusBadge.textContent = "Status: Finish missing";
+        }
+        setValidationState("failed", missingFinishValidationMessage);
+        setWorkspaceMessage(missingFinishValidationMessage);
+        openModal(elements.validationModal);
+        window.setTimeout(() => {
+          if (elements.validationBox) {
+            elements.validationBox.focus({ preventScroll: true });
+          }
+        }, 0);
+        return;
+      }
+
       activateMode("validation");
       validationSuccessDismissed = false;
       hideValidationSuccessFeedback();
       if (elements.shareValidationRunButton) {
         elements.shareValidationRunButton.hidden = true;
       }
-      validationActive = hasFinish;
-      validationCheckRequested = hasFinish;
+      validationActive = true;
+      validationCheckRequested = true;
       validationPassed = false;
       validatedLevelData = null;
       updateValidationBadge();
       updateGameChrome("validation");
       setActiveView("game");
       closeModal(elements.validationModal);
-      if (hasFinish) {
-        setValidationState("running", "Play the full level. Publishing unlocks when the cube reaches the finish.");
-        setWorkspaceMessage("Clear check running");
-      } else {
-        validationCheckRequested = false;
-        if (elements.validationStatusBadge) {
-          elements.validationStatusBadge.textContent = "Status: Finish missing";
-        }
-        setValidationState("failed", "Add a finish line before publishing.");
-        setWorkspaceMessage("Testing level. Finish line missing for validation.");
-      }
+      setValidationState("running", "Play the full level. Publishing unlocks when the cube reaches the finish.");
+      setWorkspaceMessage("Clear check running");
       await preloadLevelAssets(levelData);
       ensureGame();
 
@@ -1954,6 +2017,11 @@
     };
 
     const restartCurrentRun = () => {
+      if (shouldBlockValidatedRunRestart()) {
+        blockValidatedRunRestart();
+        return;
+      }
+
       hideValidationSuccessFeedback();
       closeCommunityClearModal();
 
@@ -1977,6 +2045,15 @@
       if (gameScene) {
         gameScene.reset(true);
       }
+    };
+
+    const startValidationFromControl = (event) => {
+      if (shouldBlockValidatedRunRestartEvent(event)) {
+        blockValidatedRunRestart(event);
+        return;
+      }
+
+      startValidation();
     };
 
     const downloadLevelFile = (levelData, messagePrefix = "Saved file") => {
@@ -2126,14 +2203,14 @@
     activateMode("create");
 
     elements.modeButtons.forEach((button) => {
-      button.addEventListener("click", () => {
+      button.addEventListener("click", (event) => {
         activeCommunityLevel = null;
         if (button.dataset.mode === "test") {
           startTest();
           return;
         }
         if (button.dataset.mode === "validation") {
-          startValidation();
+          startValidationFromControl(event);
           return;
         }
         activateMode(button.dataset.mode);
@@ -2244,7 +2321,11 @@
       elements.levelScroll.scrollLeft = 0;
     });
 
-    elements.playButton.addEventListener("click", () => {
+    elements.playButton.addEventListener("click", (event) => {
+      if (shouldBlockValidatedRunRestartEvent(event)) {
+        blockValidatedRunRestart(event);
+        return;
+      }
       if (gameRunMode === "validation") {
         startValidation();
         return;
@@ -2285,9 +2366,20 @@
       });
     }
 
-    elements.validateLevelButton.addEventListener("click", startValidation);
-    elements.startValidationButton.addEventListener("click", startValidation);
-    elements.retryValidationButton.addEventListener("click", startValidation);
+    elements.validateLevelButton.addEventListener("click", startValidationFromControl);
+    elements.startValidationButton.addEventListener("click", startValidationFromControl);
+    elements.retryValidationButton.addEventListener("keydown", (event) => {
+      if (shouldBlockValidatedRunRestartEvent(event)) {
+        blockValidatedRunRestart(event);
+      }
+    });
+    elements.retryValidationButton.addEventListener("click", (event) => {
+      if (shouldBlockValidatedRunRestartEvent(event)) {
+        blockValidatedRunRestart(event);
+        return;
+      }
+      startValidationFromControl(event);
+    });
     elements.shareValidationRunButton.addEventListener("click", openPublishModal);
     elements.resetProjectButton.addEventListener("click", resetProject);
 
@@ -2363,6 +2455,16 @@
       const isRestartLetter = event.code === "KeyR" || event.key === "r" || event.key === "R";
       const isEndedSpaceRestart = (event.code === "Space" || event.key === " ") && gameScene && gameScene.ended;
       const isRestartIntent = isEnter || isRestartLetter || isEndedSpaceRestart;
+      if (isRestartIntent
+        && gameScene
+        && elements.gameView.classList.contains("is-active")
+        && !isValidationSuccessActionTarget(event.target)
+        && !shouldIgnoreGameShortcut(event)
+        && shouldBlockValidatedRunRestart()) {
+        blockValidatedRunRestart(event);
+        return;
+      }
+
       const canRestartCurrentRun = gameScene
         && elements.gameView.classList.contains("is-active")
         && ["test", "validation", "community"].includes(gameRunMode)

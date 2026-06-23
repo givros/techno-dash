@@ -50,20 +50,30 @@
 
       this.y += this.velocityY * deltaSeconds;
 
-      const bottom = this.y + this.size / 2;
-      const top = this.y - this.size / 2;
-      if (this.gravityDirection === 1 && bottom >= this.groundY) {
+      let grounded = false;
+      const halfSize = this.size / 2;
+      let bottom = this.y + halfSize;
+      let top = this.y - halfSize;
+
+      if (bottom >= this.groundY) {
         this.y = this.groundY - this.size / 2;
-        this.velocityY = 0;
-        this.grounded = true;
-      } else if (this.gravityDirection === -1 && top <= this.ceilingY) {
-        this.y = this.ceilingY + this.size / 2;
-        this.velocityY = 0;
-        this.grounded = true;
-      } else {
-        this.grounded = false;
+        if (this.velocityY > 0) {
+          this.velocityY = 0;
+        }
+        grounded = this.gravityDirection === 1;
+        bottom = this.y + halfSize;
+        top = this.y - halfSize;
       }
 
+      if (top <= this.ceilingY) {
+        this.y = this.ceilingY + this.size / 2;
+        if (this.velocityY < 0) {
+          this.velocityY = 0;
+        }
+        grounded = this.gravityDirection === -1;
+      }
+
+      this.grounded = grounded;
       this.syncSprite();
     }
 
@@ -73,6 +83,15 @@
         : surfaceY - this.size / 2;
       this.velocityY = 0;
       this.grounded = true;
+      this.syncSprite();
+    }
+
+    blockAt(surfaceY, gravityDirection = this.gravityDirection) {
+      this.y = gravityDirection === -1
+        ? surfaceY + this.size / 2
+        : surfaceY - this.size / 2;
+      this.velocityY = 0;
+      this.grounded = false;
       this.syncSprite();
     }
 
