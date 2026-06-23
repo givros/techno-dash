@@ -17,6 +17,7 @@
           gravity: 1350,
           jumpForce: 560,
           backgroundColor: "#071322",
+          groundTheme: "dirt",
           deathAnimation: "burst"
         },
         obstacles: [],
@@ -32,6 +33,7 @@
         gravity: Level.clampNumber(source.settings && source.settings.gravity, 600, 2400, defaults.settings.gravity),
         jumpForce: Level.clampNumber(source.settings && source.settings.jumpForce, 260, 900, defaults.settings.jumpForce),
         backgroundColor: Level.normalizeHexColor(source.settings && source.settings.backgroundColor, defaults.settings.backgroundColor),
+        groundTheme: Level.normalizeGroundTheme(source.settings && source.settings.groundTheme, defaults.settings.groundTheme),
         deathAnimation: Level.normalizeDeathAnimation(source.settings && source.settings.deathAnimation)
       };
 
@@ -224,7 +226,7 @@
           id: "structure",
           label: "Structure",
           tools: [
-            { type: "solidBlock", label: "Block", note: "safe" },
+            { type: "solidBlock", label: "Metal", note: "safe" },
             { type: "dirtBlock", label: "Dirt", note: "solid" },
             { type: "iceBlock", label: "Ice", note: "solid" },
             { type: "grassBlock", label: "Grass", note: "solid" },
@@ -373,6 +375,7 @@
 
     static getMaterialBlockStyles() {
       return {
+        solidBlock: { name: "metal", color: "#64748b" },
         dirtBlock: { name: "dirt", color: "#8b5a32" },
         iceBlock: { name: "ice", color: "#8fd8ff" },
         grassBlock: { name: "grass", color: "#58c76d" },
@@ -406,13 +409,6 @@
           { name: "green", color: "#22c55e", accent: "#86efac", stroke: "#15803d" },
           { name: "violet", color: "#8b5cf6", accent: "#c4b5fd", stroke: "#5b21b6" },
           { name: "orange", color: "#f97316", accent: "#fed7aa", stroke: "#c2410c" }
-        ],
-        solidBlock: [
-          { name: "blue", color: "#5aa7e8", accent: "#9bd0ff", stroke: "#1f5f93" },
-          { name: "steel", color: "#64748b", accent: "#cbd5e1", stroke: "#334155" },
-          { name: "violet", color: "#8b5cf6", accent: "#c4b5fd", stroke: "#5b21b6" },
-          { name: "green", color: "#10b981", accent: "#a7f3d0", stroke: "#047857" },
-          { name: "pink", color: "#ec4899", accent: "#fbcfe8", stroke: "#be185d" }
         ]
       };
     }
@@ -449,6 +445,27 @@
     static normalizeDeathAnimation(value) {
       const animation = String(value || "").trim();
       return ["burst", "shatter", "fade"].includes(animation) ? animation : "burst";
+    }
+
+    static getGroundThemes() {
+      return [
+        { id: "dirt", label: "Dirt", color: "#7a4727", lineColor: "#21150d" },
+        { id: "ice", label: "Ice", color: "#74d6ff", lineColor: "#d7f8ff" },
+        { id: "metal", label: "Metal", color: "#3f4856", lineColor: "#111827" }
+      ];
+    }
+
+    static getGroundTheme(id) {
+      const normalized = Level.normalizeGroundTheme(id);
+      return Level.getGroundThemes().find((theme) => theme.id === normalized) || Level.getGroundThemes()[0];
+    }
+
+    static normalizeGroundTheme(value, fallback = "dirt") {
+      const id = String(value || "").trim().toLowerCase();
+      if (Level.getGroundThemes().some((theme) => theme.id === id)) {
+        return id;
+      }
+      return Level.getGroundThemes().some((theme) => theme.id === fallback) ? fallback : "dirt";
     }
 
     static getObstacleColorStyle(type, color) {

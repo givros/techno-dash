@@ -1075,7 +1075,75 @@ button:disabled {
 
 .background-palette-preview {
   border-color: rgba(244, 247, 251, 0.72);
-  background: #071322;
+  background-color: #071322;
+  background-image:
+    linear-gradient(to bottom, transparent 0 62%, rgba(0, 0, 0, 0) 62%),
+    url("../assets/tiles/ground-dirt-32.png?v=generated-ground-dirt-1");
+  background-position: 0 0, left bottom;
+  background-repeat: no-repeat, repeat-x;
+  background-size: 100% 100%, 32px 16px;
+}
+
+.background-palette-preview[data-ground-theme-preview="ice"] {
+  background-image:
+    linear-gradient(to bottom, transparent 0 62%, rgba(0, 0, 0, 0) 62%),
+    url("../assets/tiles/ground-ice-32.png?v=generated-ground-ice-1");
+}
+
+.background-palette-preview[data-ground-theme-preview="metal"] {
+  background-image:
+    linear-gradient(to bottom, transparent 0 62%, rgba(0, 0, 0, 0) 62%),
+    url("../assets/tiles/ground-metal-32.png?v=generated-ground-metal-1");
+}
+
+.ground-theme-section {
+  display: grid;
+  gap: 8px;
+}
+
+.ground-theme-title {
+  margin: 0;
+  padding: 7px 9px;
+  border: 1px solid rgba(96, 116, 145, 0.32);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  color: #d8e7ff;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.ground-theme-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ground-theme-button {
+  min-height: 82px;
+}
+
+.ground-theme-preview {
+  border: 0;
+  border-radius: 0;
+  background-color: #7a4727;
+  background-image: url("../assets/tiles/ground-dirt-32.png?v=generated-ground-dirt-1");
+  background-size: 32px 32px;
+  background-origin: border-box;
+  background-clip: border-box;
+  background-repeat: repeat;
+  image-rendering: pixelated;
+}
+
+.ground-theme-preview[data-ground-theme-preview="ice"] {
+  background-color: #74d6ff;
+  background-image: url("../assets/tiles/ground-ice-32.png?v=generated-ground-ice-1");
+}
+
+.ground-theme-preview[data-ground-theme-preview="metal"] {
+  background-color: #3f4856;
+  background-image: url("../assets/tiles/ground-metal-32.png?v=generated-ground-metal-1");
 }
 
 .gameplay-category {
@@ -1298,18 +1366,36 @@ button:disabled {
 }
 
 .tool-swatch[data-type="solidBlock"] {
-  background: var(--object-color, #5aa7e8);
-  border-color: transparent;
+  border: 0;
+  border-radius: 0;
+  background-color: #64748b;
+  background-image: url("../assets/tiles/metal-block-32.png?v=generated-metal-block-1");
+  background-size: cover;
+  background-origin: border-box;
+  background-clip: border-box;
+  image-rendering: pixelated;
 }
 
 .tool-swatch[data-type="dirtBlock"] {
-  background: #8b5a32;
-  border-color: transparent;
+  border: 0;
+  border-radius: 0;
+  background-color: #8b5a32;
+  background-image: url("../assets/tiles/dirt-block-32.png?v=generated-grass-dirt-2");
+  background-size: cover;
+  background-origin: border-box;
+  background-clip: border-box;
+  image-rendering: pixelated;
 }
 
 .tool-swatch[data-type="iceBlock"] {
-  background: #8fd8ff;
-  border-color: transparent;
+  border: 0;
+  border-radius: 0;
+  background-color: #74d6ff;
+  background-image: url("../assets/tiles/ice-block-32.png?v=generated-ice-1");
+  background-size: cover;
+  background-origin: border-box;
+  background-clip: border-box;
+  image-rendering: pixelated;
 }
 
 .tool-swatch[data-type="grassBlock"] {
@@ -2051,17 +2137,41 @@ button:disabled {
   right: 0;
   bottom: 0;
   height: var(--ground-offset, 32px);
-  background: #2f3747;
+  background-color: #7a4727;
+  background-image: url("../assets/tiles/ground-dirt-32.png?v=generated-ground-dirt-1");
+  background-size: 32px 32px;
+  background-origin: border-box;
+  background-clip: border-box;
+  background-repeat: repeat;
+  image-rendering: pixelated;
 }
 
 .grid-ground::before {
   content: "";
   position: absolute;
-  bottom: 0;
+  top: 0;
   left: 0;
   right: 0;
-  height: 4px;
-  background: #f0c04a;
+  height: 2px;
+  background: rgba(33, 21, 13, 0.9);
+}
+
+.level-grid[data-ground-theme="ice"] .grid-ground {
+  background-color: #74d6ff;
+  background-image: url("../assets/tiles/ground-ice-32.png?v=generated-ground-ice-1");
+}
+
+.level-grid[data-ground-theme="ice"] .grid-ground::before {
+  background: rgba(215, 248, 255, 0.86);
+}
+
+.level-grid[data-ground-theme="metal"] .grid-ground {
+  background-color: #3f4856;
+  background-image: url("../assets/tiles/ground-metal-32.png?v=generated-ground-metal-1");
+}
+
+.level-grid[data-ground-theme="metal"] .grid-ground::before {
+  background: rgba(17, 24, 39, 0.92);
 }
 
 .editor-start-marker {
@@ -2224,8 +2334,14 @@ button:disabled {
 }
 
 .tool-cursor-shape[data-type="solidBlock"] {
-  border-color: transparent;
-  background: var(--object-color, #5aa7e8);
+  border: 0;
+  border-radius: 0;
+  background-color: #64748b;
+  background-image: url("../assets/tiles/metal-block-32.png?v=generated-metal-block-1");
+  background-size: cover;
+  background-origin: border-box;
+  background-clip: border-box;
+  image-rendering: pixelated;
 }
 
 .tool-cursor-shape[data-type="dirtBlock"],
@@ -2235,11 +2351,25 @@ button:disabled {
 }
 
 .tool-cursor-shape[data-type="dirtBlock"] {
-  background: #8b5a32;
+  border: 0;
+  border-radius: 0;
+  background-color: #8b5a32;
+  background-image: url("../assets/tiles/dirt-block-32.png?v=generated-grass-dirt-2");
+  background-size: cover;
+  background-origin: border-box;
+  background-clip: border-box;
+  image-rendering: pixelated;
 }
 
 .tool-cursor-shape[data-type="iceBlock"] {
-  background: #8fd8ff;
+  border: 0;
+  border-radius: 0;
+  background-color: #74d6ff;
+  background-image: url("../assets/tiles/ice-block-32.png?v=generated-ice-1");
+  background-size: cover;
+  background-origin: border-box;
+  background-clip: border-box;
+  image-rendering: pixelated;
 }
 
 .tool-cursor-shape[data-type="grassBlock"] {
@@ -2582,9 +2712,15 @@ button:disabled {
 
 .grid-obstacle[data-type="solidBlock"],
 .grid-preview[data-type="solidBlock"] {
-  border-color: transparent;
-  border-radius: 6px;
-  background: var(--object-color, #5aa7e8);
+  border: 0;
+  border-radius: 0;
+  background-color: #64748b;
+  background-image: url("../assets/tiles/metal-block-32.png?v=generated-metal-block-1");
+  background-size: 32px 32px;
+  background-origin: border-box;
+  background-clip: border-box;
+  background-repeat: repeat;
+  image-rendering: pixelated;
 }
 
 .grid-obstacle[data-type="dirtBlock"],
@@ -2599,12 +2735,28 @@ button:disabled {
 
 .grid-obstacle[data-type="dirtBlock"],
 .grid-preview[data-type="dirtBlock"] {
-  background: #8b5a32;
+  border: 0;
+  border-radius: 0;
+  background-color: #8b5a32;
+  background-image: url("../assets/tiles/dirt-block-32.png?v=generated-grass-dirt-2");
+  background-size: 32px 32px;
+  background-origin: border-box;
+  background-clip: border-box;
+  background-repeat: repeat;
+  image-rendering: pixelated;
 }
 
 .grid-obstacle[data-type="iceBlock"],
 .grid-preview[data-type="iceBlock"] {
-  background: #8fd8ff;
+  border: 0;
+  border-radius: 0;
+  background-color: #74d6ff;
+  background-image: url("../assets/tiles/ice-block-32.png?v=generated-ice-1");
+  background-size: 32px 32px;
+  background-origin: border-box;
+  background-clip: border-box;
+  background-repeat: repeat;
+  image-rendering: pixelated;
 }
 
 .grid-obstacle[data-type="grassBlock"],

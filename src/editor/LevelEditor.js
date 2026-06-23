@@ -34,11 +34,14 @@
       this.toolPalette = document.querySelector(".level-tool-palette");
       this.decorPalette = document.getElementById("decor-palette");
       this.colorPanel = document.getElementById("block-color-panel");
+      this.groundThemePalette = document.getElementById("ground-theme-palette");
       this.selectedColors = this.getDefaultSelectedColors();
       this.renderGameplayTools();
       this.renderDecorationTools();
+      this.renderGroundThemeControls();
       this.renderColorControls();
       this.toolButtons = [...document.querySelectorAll(".tool-button")];
+      this.groundThemeButtons = [...document.querySelectorAll("#ground-theme-palette [data-ground-theme]")];
       this.actionButtons = [...document.querySelectorAll("[data-editor-action]")];
       this.layerButtons = [...document.querySelectorAll("[data-editor-layer]")];
       this.paletteTabs = [...document.querySelectorAll("[data-palette-tab]")];
@@ -52,6 +55,7 @@
       this.gravityInput = document.getElementById("gravity-input");
       this.jumpInput = document.getElementById("jump-input");
       this.backgroundColorInput = document.getElementById("background-color-input");
+      this.groundThemeSelect = document.getElementById("ground-theme-select");
       this.deathAnimationSelect = document.getElementById("death-animation-select");
       this.preview = null;
       this.rectanglePreview = null;
@@ -202,6 +206,35 @@
       button.appendChild(note);
 
       return button;
+    }
+
+    renderGroundThemeControls() {
+      if (!this.groundThemePalette) {
+        return;
+      }
+
+      this.groundThemePalette.innerHTML = "";
+      window.TechnoDash.Level.getGroundThemes().forEach((theme) => {
+        const button = document.createElement("button");
+        button.className = "palette-card ground-theme-button";
+        button.type = "button";
+        button.dataset.groundTheme = theme.id;
+
+        const preview = document.createElement("span");
+        preview.className = "palette-preview ground-theme-preview";
+        preview.dataset.groundThemePreview = theme.id;
+        button.appendChild(preview);
+
+        const label = document.createElement("strong");
+        label.textContent = theme.label;
+        button.appendChild(label);
+
+        const note = document.createElement("small");
+        note.textContent = "ground";
+        button.appendChild(note);
+
+        this.groundThemePalette.appendChild(button);
+      });
     }
 
     getDefaultSelectedColors() {
@@ -378,11 +411,24 @@
 
       this.deleteButton.addEventListener("click", () => this.deleteSelectedObstacle());
       this.clearButton.addEventListener("click", () => this.onRequestClearLevel());
-      [this.speedInput, this.gravityInput, this.jumpInput, this.backgroundColorInput, this.deathAnimationSelect].filter(Boolean).forEach((input) => {
+      [this.speedInput, this.gravityInput, this.jumpInput, this.backgroundColorInput, this.groundThemeSelect, this.deathAnimationSelect].filter(Boolean).forEach((input) => {
         input.addEventListener("input", () => this.updateSettingsFromInputs());
       });
+      if (this.groundThemeSelect) {
+        this.groundThemeSelect.addEventListener("change", () => this.updateSettingsFromInputs());
+      }
       if (this.deathAnimationSelect) {
         this.deathAnimationSelect.addEventListener("change", () => this.updateSettingsFromInputs());
+      }
+      if (this.groundThemePalette) {
+        this.groundThemePalette.addEventListener("click", (event) => {
+          const button = event.target.closest("[data-ground-theme]");
+          if (!button) {
+            return;
+          }
+
+          this.chooseGroundTheme(button.dataset.groundTheme);
+        });
       }
     }
 
@@ -1362,8 +1408,26 @@
         gravity: Number(this.gravityInput.value),
         jumpForce: Number(this.jumpInput.value),
         backgroundColor: this.backgroundColorInput.value,
+        groundTheme: this.getSelectedGroundTheme(),
         deathAnimation: this.deathAnimationSelect ? this.deathAnimationSelect.value : "burst"
       };
+      this.commitChange();
+    }
+
+    getSelectedGroundTheme() {
+      return window.TechnoDash.Level.normalizeGroundTheme(
+        this.groundThemeSelect ? this.groundThemeSelect.value : this.levelData.settings.groundTheme
+      );
+    }
+
+    chooseGroundTheme(theme) {
+      const nextTheme = window.TechnoDash.Level.normalizeGroundTheme(theme);
+      if (this.levelData.settings.groundTheme === nextTheme) {
+        this.refreshGroundThemeControls();
+        return;
+      }
+
+      this.levelData.settings.groundTheme = nextTheme;
       this.commitChange();
     }
 
@@ -1417,6 +1481,7 @@
       this.grid.style.height = `${gridHeight}px`;
       this.grid.style.setProperty("--tile-size", `${scaledTileSize}px`);
       this.grid.style.setProperty("--ground-offset", `${scaledGroundOffset}px`);
+      this.grid.dataset.groundTheme = window.TechnoDash.Level.normalizeGroundTheme(this.levelData.settings.groundTheme);
 
       this.levelData.obstacles.forEach((obstacle) => {
         const button = document.createElement("button");
@@ -1617,11 +1682,15 @@
       this.gravityInput.value = this.levelData.settings.gravity;
       this.jumpInput.value = this.levelData.settings.jumpForce;
       this.backgroundColorInput.value = this.levelData.settings.backgroundColor;
+      if (this.groundThemeSelect) {
+        this.groundThemeSelect.value = window.TechnoDash.Level.normalizeGroundTheme(this.levelData.settings.groundTheme);
+      }
       if (this.deathAnimationSelect) {
         this.deathAnimationSelect.value = this.levelData.settings.deathAnimation;
       }
       this.refreshToolColors();
       this.refreshColorControls();
+      this.refreshGroundThemeControls();
     }
 
     getObstacleLabel(obstacle) {
@@ -1651,7 +1720,7 @@
       const labels = {
         block: "Legacy",
         platform: "Platform",
-        solidBlock: "Block",
+        solidBlock: "Metal",
         gravitySwitch: "Gravity",
         oneWayPlatform: "One-way",
         movingPlatform: "Moving"
@@ -1742,6 +1811,23 @@
         const active = this.selectedTool === type && this.getSelectedColor(type) === color;
         button.classList.toggle("is-active", active);
       });
+    }
+
+    refreshGroundThemeControls() {
+      const activeTheme = window.TechnoDash.Level.normalizeGroundTheme(this.levelData.settings.groundTheme);
+      if (this.groundThemeButtons) {
+        this.groundThemeButtons.forEach((button) => {
+          const active = button.dataset.groundTheme === activeTheme;
+          button.classList.toggle("is-active", active);
+          button.setAttribute("aria-pressed", String(active));
+        });
+      }
+      if (this.groundThemeSelect) {
+        this.groundThemeSelect.value = activeTheme;
+      }
+      if (this.grid) {
+        this.grid.dataset.groundTheme = activeTheme;
+      }
     }
 
     clearColorStyle(element) {

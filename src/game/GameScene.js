@@ -46,6 +46,8 @@
       this.pendingPlay = false;
       this.programFeatures = GameScene.createProgramFeatures({ activeBlockIds: [] });
       this.decorSprites = new Map();
+      this.blockTextureSprites = new Map();
+      this.groundTextureSprite = null;
       this.effectParticles = [];
       this.endAnimationPlayed = false;
       this.endPlayerHidden = false;
@@ -153,7 +155,44 @@
       };
     }
 
-    preload() {}
+    static getBlockTextureKey(type) {
+      return `block-texture-${type}`;
+    }
+
+    static getBlockTexturePath(type) {
+      const paths = {
+        solidBlock: "assets/tiles/metal-block-32.png?v=generated-metal-block-1",
+        dirtBlock: "assets/tiles/dirt-block-32.png?v=generated-grass-dirt-2",
+        iceBlock: "assets/tiles/ice-block-32.png?v=generated-ice-1"
+      };
+      return paths[type] || "";
+    }
+
+    static getGroundTextureKey(theme = "dirt") {
+      return `ground-texture-${window.TechnoDash.Level.normalizeGroundTheme(theme)}`;
+    }
+
+    static getGroundTexturePath(theme = "dirt") {
+      const paths = {
+        dirt: "assets/tiles/ground-dirt-32.png?v=generated-ground-dirt-1",
+        ice: "assets/tiles/ground-ice-32.png?v=generated-ground-ice-1",
+        metal: "assets/tiles/ground-metal-32.png?v=generated-ground-metal-1"
+      };
+      return paths[window.TechnoDash.Level.normalizeGroundTheme(theme)] || paths.dirt;
+    }
+
+    static isTexturedBlockType(type) {
+      return Boolean(GameScene.getBlockTexturePath(type));
+    }
+
+    preload() {
+      ["solidBlock", "dirtBlock", "iceBlock"].forEach((type) => {
+        this.load.image(GameScene.getBlockTextureKey(type), GameScene.getBlockTexturePath(type));
+      });
+      window.TechnoDash.Level.getGroundThemes().forEach((theme) => {
+        this.load.image(GameScene.getGroundTextureKey(theme.id), GameScene.getGroundTexturePath(theme.id));
+      });
+    }
 
     static getDecorationTextureKey(type) {
       return `decor-${type}`;
@@ -190,6 +229,8 @@
       const disposeSceneResources = () => {
         this.detachGlobalInputListeners();
         this.clearDecorationSprites();
+        this.clearBlockTextureSprites();
+        this.clearGroundTextureSprite();
       };
       this.events.once(Phaser.Scenes.Events.SHUTDOWN, disposeSceneResources);
       this.events.once(Phaser.Scenes.Events.DESTROY || "destroy", disposeSceneResources);
@@ -1277,6 +1318,7 @@
       const effectsGraphics = this.effectsGraphics;
       const settings = this.getRuntimeSettings();
       this.renderStaticWorld(settings);
+      this.syncGroundTexture(settings);
       gridGraphics.clear();
       graphics.clear();
       if (effectsGraphics) {
@@ -1287,6 +1329,7 @@
         this.drawBackgroundGrid(gridGraphics);
       }
       this.renderDecorations();
+      this.renderTexturedBlocks();
       this.drawLevelObjects(graphics);
       this.drawEffectParticles(effectsGraphics);
       this.syncProgramVisuals();
@@ -1295,6 +1338,7 @@
     renderStaticWorld(settings) {
       const signature = [
         settings.backgroundColor,
+        settings.groundTheme,
         this.programFeatures.ground,
         this.worldWidth,
         this.worldHeight,
@@ -1309,8 +1353,8 @@
       backgroundGraphics.fillStyle(window.TechnoDash.Level.hexToNumber(settings.backgroundColor, 0x071322), 1);
       backgroundGraphics.fillRect(0, 0, this.worldWidth, this.worldHeight);
       this.drawThemeAtmosphere(backgroundGraphics, settings.backgroundColor);
-      if (this.programFeatures.ground) {
-        this.drawGround(backgroundGraphics);
+      if (this.programFeatures.ground && !this.shouldRenderGroundTexture(settings.groundTheme)) {
+        this.drawGround(backgroundGraphics, settings);
       }
 
       this.staticWorldDirty = false;
@@ -1405,6 +1449,70 @@
       this.decorSprites.clear();
     }
 
+    renderTexturedBlocks() {
+      if (!this.blockTextureSprites) {
+        return;
+      }
+
+      if (!this.programFeatures.obstacles) {
+        this.clearBlockTextureSprites();
+        return;
+      }
+
+      const visibleIds = new Set();
+      this.getFrameScreenObjects().forEach((object) => {
+        if (!this.shouldRenderBlockTexture(object)) {
+          return;
+        }
+
+        if (object.right < -40 || object.left > this.worldWidth + 80) {
+          return;
+        }
+
+        const key = GameScene.getBlockTextureKey(object.type);
+        let sprite = this.blockTextureSprites.get(object.id);
+        if (!sprite) {
+          sprite = this.add.tileSprite(object.left, object.top, object.width, object.height, key);
+          sprite.setOrigin(0, 0);
+          sprite.setDepth(2.5);
+          this.blockTextureSprites.set(object.id, sprite);
+        } else if (sprite.texture.key !== key) {
+          sprite.setTexture(key);
+        }
+
+        sprite.setPosition(object.left, object.top);
+        sprite.setSize(object.width, object.height);
+        sprite.setDisplaySize(object.width, object.height);
+        sprite.setVisible(true);
+        visibleIds.add(object.id);
+      });
+
+      this.blockTextureSprites.forEach((sprite, id) => {
+        if (!visibleIds.has(id)) {
+          sprite.destroy();
+          this.blockTextureSprites.delete(id);
+        }
+      });
+    }
+
+    shouldRenderBlockTexture(object) {
+      if (!object || !GameScene.isTexturedBlockType(object.type)) {
+        return false;
+      }
+
+      const key = GameScene.getBlockTextureKey(object.type);
+      return this.textures && this.textures.exists(key);
+    }
+
+    clearBlockTextureSprites() {
+      if (!this.blockTextureSprites) {
+        return;
+      }
+
+      this.blockTextureSprites.forEach((sprite) => sprite.destroy());
+      this.blockTextureSprites.clear();
+    }
+
     drawBackgroundGrid(graphics) {
       graphics.lineStyle(1, 0x253045, 0.75);
       const tileSize = this.tileSize || window.TechnoDash.Level.getTileSize();
@@ -1419,11 +1527,50 @@
       }
     }
 
-    drawGround(graphics) {
-      graphics.fillStyle(0x2f3747, 1);
+    drawGround(graphics, settings = {}) {
+      const theme = window.TechnoDash.Level.getGroundTheme(settings.groundTheme);
+      graphics.fillStyle(window.TechnoDash.Level.hexToNumber(theme.color, 0x2f3747), 1);
       graphics.fillRect(0, this.groundY, this.worldWidth, this.worldHeight - this.groundY);
-      graphics.lineStyle(4, 0xf0c04a, 1);
+      graphics.lineStyle(2, window.TechnoDash.Level.hexToNumber(theme.lineColor, 0x21150d), 0.9);
       graphics.lineBetween(0, this.groundY, this.worldWidth, this.groundY);
+    }
+
+    shouldRenderGroundTexture(theme = "dirt") {
+      const key = GameScene.getGroundTextureKey(theme);
+      return this.textures && this.textures.exists(key);
+    }
+
+    syncGroundTexture(settings = {}) {
+      const theme = window.TechnoDash.Level.normalizeGroundTheme(settings.groundTheme);
+      if (!this.programFeatures.ground || !this.shouldRenderGroundTexture(theme)) {
+        this.clearGroundTextureSprite();
+        return;
+      }
+
+      const key = GameScene.getGroundTextureKey(theme);
+      const height = Math.max(1, this.worldHeight - this.groundY);
+      if (!this.groundTextureSprite) {
+        this.groundTextureSprite = this.add.tileSprite(0, this.groundY, this.worldWidth, height, key);
+        this.groundTextureSprite.setOrigin(0, 0);
+        this.groundTextureSprite.setDepth(0.25);
+      } else if (this.groundTextureSprite.texture.key !== key) {
+        this.groundTextureSprite.setTexture(key);
+      }
+
+      this.groundTextureSprite.setPosition(0, this.groundY);
+      this.groundTextureSprite.setSize(this.worldWidth, height);
+      this.groundTextureSprite.setDisplaySize(this.worldWidth, height);
+      this.groundTextureSprite.tilePositionX = Math.floor(this.scrollX || 0);
+      this.groundTextureSprite.setVisible(true);
+    }
+
+    clearGroundTextureSprite() {
+      if (!this.groundTextureSprite) {
+        return;
+      }
+
+      this.groundTextureSprite.destroy();
+      this.groundTextureSprite = null;
     }
 
     drawThemeAtmosphere(graphics, color) {
@@ -1478,6 +1625,10 @@
         }
 
         if (window.TechnoDash.Level.isSolidBlockType(object.type)) {
+          if (this.shouldRenderBlockTexture(object)) {
+            return;
+          }
+
           this.drawSolidBlock(graphics, object);
           return;
         }

@@ -5,16 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Dash Maker</title>
     <link rel="icon" href="favicon.ico">
-    <link rel="stylesheet" href="styles/main.css?v=maker-33">
+    <link rel="stylesheet" href="styles/main.css?v=maker-41">
     <script defer src="vendor/phaser/phaser.min.js?v=maker-3"></script>
     <script defer src="src/game/DecorCatalog.js?v=maker-2"></script>
     <script defer src="src/game/Player.js?v=maker-7"></script>
-    <script defer src="src/game/Level.js?v=maker-12"></script>
+    <script defer src="src/game/Level.js?v=maker-13"></script>
     <script defer src="src/game/CollisionManager.js?v=maker-8"></script>
-    <script defer src="src/game/GameScene.js?v=maker-27"></script>
-    <script defer src="src/editor/LevelEditor.js?v=maker-16"></script>
+    <script defer src="src/game/GameScene.js?v=maker-35"></script>
+    <script defer src="src/editor/LevelEditor.js?v=maker-17"></script>
     <script defer src="src/storage/SupabaseManager.js?v=maker-6"></script>
-    <script defer src="src/main.js?v=maker-46"></script>
+    <script defer src="src/main.js?v=maker-47"></script>
   </head>
   <body>
     <div class="desktop-warning">
@@ -203,6 +203,10 @@
                   <span id="background-palette-preview" class="palette-preview background-palette-preview" aria-hidden="true"></span>
                   <strong>Background</strong>
                 </button>
+                <section class="ground-theme-section" aria-label="Ground style">
+                  <h3 class="ground-theme-title">Ground</h3>
+                  <div id="ground-theme-palette" class="ground-theme-grid"></div>
+                </section>
               </div>
             </div>
           </section>
@@ -510,6 +514,14 @@
           <label>
             Background color
             <input id="background-color-input" type="color" value="#071322">
+          </label>
+          <label>
+            Ground
+            <select id="ground-theme-select">
+              <option value="dirt">Dirt</option>
+              <option value="ice">Ice</option>
+              <option value="metal">Metal</option>
+            </select>
           </label>
         </div>
       </section>

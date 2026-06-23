@@ -163,6 +163,7 @@
       gravityInput: document.getElementById("gravity-input"),
       jumpInput: document.getElementById("jump-input"),
       backgroundColorInput: document.getElementById("background-color-input"),
+      groundThemeSelect: document.getElementById("ground-theme-select"),
       gameStateLabel: document.getElementById("game-state-label"),
       distanceValue: document.getElementById("distance-value"),
       scoreValue: document.getElementById("score-value"),
@@ -539,8 +540,12 @@
 
       const matchingTheme = [...elements.themeSelect.options].find((option) => option.value.toLowerCase() === settings.backgroundColor);
       elements.themeSelect.value = matchingTheme ? matchingTheme.value : settings.backgroundColor;
+      if (elements.groundThemeSelect) {
+        elements.groundThemeSelect.value = window.TechnoDash.Level.normalizeGroundTheme(settings.groundTheme);
+      }
       if (elements.backgroundPalettePreview) {
-        elements.backgroundPalettePreview.style.background = settings.backgroundColor || "#071322";
+        elements.backgroundPalettePreview.style.backgroundColor = settings.backgroundColor || "#071322";
+        elements.backgroundPalettePreview.dataset.groundThemePreview = window.TechnoDash.Level.normalizeGroundTheme(settings.groundTheme);
       }
     };
 
@@ -1182,9 +1187,10 @@
       for (let x = 0; x < width; x += 24) {
         context.fillRect(x, 0, 1, groundY);
       }
-      context.fillStyle = "#2f3747";
+      const groundTheme = window.TechnoDash.Level.getGroundTheme(data.settings.groundTheme);
+      context.fillStyle = groundTheme.color;
       context.fillRect(0, groundY, width, height - groundY);
-      context.fillStyle = "#f0c04a";
+      context.fillStyle = groundTheme.lineColor;
       context.fillRect(0, groundY - 2, width, 3);
 
       data.decorations.slice(0, 18).forEach((decoration) => {
