@@ -41,6 +41,7 @@
       this.statsPublishIntervalMs = 80;
       this.lastPublishedStats = null;
       this.performanceProfile = GameScene.createPerformanceProfile();
+      this.playableStartDelayMs = 3000;
       this.levelLoadToken = 0;
       this.keyState = {
         space: false,
@@ -615,7 +616,7 @@
 
       this.expireJumpRequest(time);
       this.spaceWasDown = spaceDown;
-      this.distance = Math.max(0, Math.floor(this.scrollX));
+      this.distance = Math.max(0, Math.floor(this.getLevelProgressX(settings)));
       this.score = this.distance;
       this.updateEffectParticles(totalDeltaMs);
       this.frameHadJumpPress = false;
@@ -810,6 +811,21 @@
       const zoneMultiplier = this.getActiveSpeedZoneMultiplier();
       const portalMultiplier = timeMs < this.speedBoostUntil ? this.speedMultiplier : 1;
       return settings.speed * zoneMultiplier * portalMultiplier;
+    }
+
+    getPlayableStartOffset(settings = this.getRuntimeSettings()) {
+      const speed = Number(settings && settings.speed);
+      return Number.isFinite(speed) && speed > 0
+        ? speed * (this.playableStartDelayMs / 1000)
+        : 0;
+    }
+
+    getLevelScrollX(settings = this.getRuntimeSettings()) {
+      return (Number(this.scrollX) || 0) - this.getPlayableStartOffset(settings);
+    }
+
+    getLevelProgressX(settings = this.getRuntimeSettings()) {
+      return Math.max(0, this.getLevelScrollX(settings));
     }
 
     getActiveSpeedZoneMultiplier() {
@@ -1042,14 +1058,15 @@
     }
 
     getFrameScreenObjects() {
-      if (!this.frameScreenObjects || this.frameScreenObjectsScrollX !== this.scrollX) {
-        this.frameScreenObjects = this.level.getScreenObjects(this.scrollX, this.groundY, {
+      const levelScrollX = this.getLevelScrollX();
+      if (!this.frameScreenObjects || this.frameScreenObjectsScrollX !== levelScrollX) {
+        this.frameScreenObjects = this.level.getScreenObjects(levelScrollX, this.groundY, {
           viewportWidth: this.worldWidth,
           margin: this.tileSize * 5
         })
           .filter((object) => !this.disabledObjectIds.has(object.id))
           .map((object) => this.applyDynamicObjectState(object));
-        this.frameScreenObjectsScrollX = this.scrollX;
+        this.frameScreenObjectsScrollX = levelScrollX;
       }
 
       return this.frameScreenObjects;
@@ -1072,12 +1089,13 @@
     }
 
     getFrameDecorations() {
-      if (!this.frameDecorations || this.frameDecorationsScrollX !== this.scrollX) {
-        this.frameDecorations = this.level.getScreenDecorations(this.scrollX, this.groundY, {
+      const levelScrollX = this.getLevelScrollX();
+      if (!this.frameDecorations || this.frameDecorationsScrollX !== levelScrollX) {
+        this.frameDecorations = this.level.getScreenDecorations(levelScrollX, this.groundY, {
           viewportWidth: this.worldWidth,
           margin: this.tileSize * 8
         });
-        this.frameDecorationsScrollX = this.scrollX;
+        this.frameDecorationsScrollX = levelScrollX;
       }
 
       return this.frameDecorations;
