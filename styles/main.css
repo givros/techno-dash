@@ -249,6 +249,145 @@ body.is-community-home .community-shell {
   font-weight: 800;
 }
 
+.survival-section {
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  align-items: stretch;
+}
+
+.survival-panel,
+.survival-leaderboard-card {
+  border: 1px solid rgba(45, 212, 191, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(12, 26, 33, 0.96), rgba(12, 16, 28, 0.96));
+  box-shadow: var(--shadow);
+}
+
+.survival-panel {
+  min-height: 138px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px;
+}
+
+.survival-copy {
+  min-width: 0;
+}
+
+.survival-copy h2,
+.survival-copy p {
+  margin: 0;
+}
+
+.survival-copy h2 {
+  color: #e0fffa;
+  font-size: 34px;
+  line-height: 1;
+  font-weight: 900;
+}
+
+.survival-copy p {
+  margin-top: 9px;
+  color: var(--soft);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.survival-actions {
+  flex: 0 0 auto;
+}
+
+.survival-start-button {
+  min-height: 48px;
+  padding: 0 18px;
+  border: 1px solid rgba(45, 212, 191, 0.72);
+  border-radius: 8px;
+  background: linear-gradient(135deg, #35d7c9, #168e83);
+  color: #061114;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.survival-start-button:disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.7);
+  opacity: 0.56;
+}
+
+.survival-leaderboard-card {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+}
+
+.survival-leaderboard-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.survival-leaderboard-heading strong {
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.survival-leaderboard-heading span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.survival-leaderboard-list {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.survival-leaderboard-list li {
+  min-height: 34px;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid rgba(96, 116, 145, 0.24);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.survival-leaderboard-list strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.survival-rank,
+.survival-score,
+.survival-leaderboard-empty {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.survival-score {
+  color: #8ff5e7;
+  white-space: nowrap;
+}
+
+.survival-leaderboard-empty {
+  grid-template-columns: 1fr !important;
+}
+
 .community-level-list {
   min-height: 0;
   overflow: auto;
@@ -569,6 +708,24 @@ body.is-community-home .community-level-list {
   display: none;
 }
 
+.survival-game-menu {
+  justify-self: stretch;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto auto;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 12px;
+  border: 1px solid rgba(45, 212, 191, 0.38);
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(8, 27, 28, 0.94), rgba(14, 21, 34, 0.9));
+  box-shadow: inset 0 0 0 1px rgba(45, 212, 191, 0.1);
+}
+
+.survival-game-menu[hidden] {
+  display: none;
+}
+
 .community-game-title {
   min-width: 0;
   display: grid;
@@ -617,6 +774,18 @@ body.is-community-home .community-level-list {
 .community-game-stats strong {
   color: var(--ink);
   font-size: 15px;
+}
+
+.survival-game-stats {
+  grid-template-columns: repeat(3, max-content);
+}
+
+.survival-game-stats span {
+  border-color: rgba(45, 212, 191, 0.28);
+}
+
+.survival-game-stats strong {
+  color: #8ff5e7;
 }
 
 .community-game-actions {
@@ -3027,6 +3196,18 @@ button:disabled {
   box-shadow: 0 0 24px rgba(45, 212, 191, 0.2);
 }
 
+.game-message.is-survival-life-lost {
+  top: 50%;
+  min-width: 250px;
+  transform: translate(-50%, -50%);
+  padding: 14px 18px;
+  border-color: rgba(255, 176, 32, 0.72);
+  background: rgba(18, 13, 8, 0.92);
+  color: #ffc86a;
+  font-size: 22px;
+  box-shadow: 0 0 34px rgba(255, 176, 32, 0.24);
+}
+
 .validation-success-overlay {
   position: absolute;
   inset: 0;
@@ -3332,11 +3513,14 @@ button:disabled {
 }
 
 .app-shell.is-community-play-mode .mode-nav,
-.app-shell.is-community-play-mode .top-actions {
+.app-shell.is-community-play-mode .top-actions,
+.app-shell.is-survival-play-mode .mode-nav,
+.app-shell.is-survival-play-mode .top-actions {
   display: none;
 }
 
-.app-shell.is-community-play-mode .topbar {
+.app-shell.is-community-play-mode .topbar,
+.app-shell.is-survival-play-mode .topbar {
   grid-template-columns: 280px minmax(0, 1fr);
 }
 
@@ -3381,6 +3565,10 @@ button:disabled {
 
 .app-shell.is-game-mode .game-message:not(.is-gameover):not(.is-victory):not(.is-validated) {
   opacity: 0;
+}
+
+.app-shell.is-game-mode .game-message.is-survival-life-lost {
+  opacity: 1;
 }
 
 .app-shell.is-game-mode .game-exit-button {
@@ -3559,6 +3747,71 @@ button:disabled {
 .community-clear-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.survival-intro-card {
+  width: min(560px, 100%);
+  border-color: rgba(45, 212, 191, 0.58);
+  background:
+    radial-gradient(circle at 16% 0, rgba(45, 212, 191, 0.14), transparent 34%),
+    linear-gradient(180deg, #121b29, #081017);
+}
+
+.survival-rules {
+  display: grid;
+  gap: 9px;
+}
+
+.survival-rules span {
+  display: block;
+  padding: 11px 12px;
+  border: 1px solid rgba(96, 116, 145, 0.3);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--soft);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.survival-rules strong {
+  color: #e0fffa;
+  font-weight: 900;
+}
+
+.survival-result-card {
+  width: min(560px, 100%);
+  border-color: rgba(45, 212, 191, 0.62);
+  background:
+    radial-gradient(circle at 16% 0, rgba(45, 212, 191, 0.16), transparent 34%),
+    linear-gradient(180deg, #121b29, #081017);
+}
+
+.survival-result-score {
+  min-height: 108px;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 6px;
+  border: 1px solid rgba(45, 212, 191, 0.28);
+  border-radius: 8px;
+  background: rgba(45, 212, 191, 0.08);
+}
+
+.survival-result-score span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.survival-result-score strong {
+  color: #e0fffa;
+  font-size: 46px;
+  font-weight: 900;
+}
+
+.survival-score-form {
   gap: 10px;
 }
 
@@ -4007,6 +4260,56 @@ button:disabled {
     font-size: 12px;
   }
 
+  .survival-section {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .survival-panel {
+    min-height: 74px;
+    gap: 10px;
+    padding: 11px 12px;
+  }
+
+  .survival-copy h2 {
+    font-size: 22px;
+  }
+
+  .survival-copy p {
+    margin-top: 5px;
+    font-size: 12px;
+  }
+
+  .survival-start-button {
+    min-height: 36px;
+    padding: 0 11px;
+    font-size: 12px;
+  }
+
+  .survival-leaderboard-card {
+    gap: 7px;
+    padding: 10px;
+  }
+
+  .survival-leaderboard-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .survival-leaderboard-list li {
+    min-height: 30px;
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+    gap: 5px;
+    padding: 5px 7px;
+  }
+
+  .survival-leaderboard-list strong,
+  .survival-rank,
+  .survival-score,
+  .survival-leaderboard-empty {
+    font-size: 10px;
+  }
+
   .community-level-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
@@ -4056,6 +4359,41 @@ button:disabled {
     gap: 8px;
     padding-top: 6px;
     padding-bottom: 6px;
+  }
+
+  .app-shell.is-survival-play-mode .topbar {
+    grid-template-columns: minmax(104px, auto) minmax(0, 1fr);
+  }
+
+  .survival-game-menu {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px;
+    padding: 6px 7px;
+  }
+
+  .survival-game-menu .community-game-title {
+    display: none;
+  }
+
+  .survival-game-stats {
+    grid-template-columns: repeat(3, max-content);
+    gap: 5px;
+  }
+
+  .survival-game-stats span {
+    min-height: 28px;
+    padding: 0 6px;
+    font-size: 10px;
+  }
+
+  .survival-game-menu .community-game-actions {
+    gap: 5px;
+  }
+
+  .survival-game-menu .community-game-actions button {
+    min-height: 28px;
+    padding: 0 7px;
+    font-size: 10px;
   }
 
   .brand {
@@ -4307,6 +4645,13 @@ button:disabled {
     min-width: 96px;
     padding: 6px 10px;
     font-size: 12px;
+  }
+
+  .app-shell.is-game-mode .game-message.is-survival-life-lost {
+    top: 50%;
+    min-width: 190px;
+    padding: 10px 12px;
+    font-size: 16px;
   }
 
   .app-shell.is-game-mode .game-exit-button {

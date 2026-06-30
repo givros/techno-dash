@@ -12,6 +12,7 @@
       apiKey: "sb_publishable_DUE6pD0GAdF1zMq7HtOtLA_GZd6Etfw",
       tableName: "community_levels",
       voteTableName: "community_level_votes",
+      survivalScoreTableName: "survival_scores",
       useVoteTable: false
     });
 
@@ -74,6 +75,9 @@
       communitySortSummary: document.getElementById("community-sort-summary"),
       communitySortButtons: [...document.querySelectorAll("[data-community-sort]")],
       appShell: document.querySelector(".app-shell"),
+      startSurvivalButton: document.getElementById("start-survival-button"),
+      survivalStatus: document.getElementById("survival-status"),
+      survivalLeaderboardList: document.getElementById("survival-leaderboard-list"),
       communityGameMenu: document.getElementById("community-game-menu"),
       communityGameName: document.getElementById("community-game-name"),
       communityGamePlays: document.getElementById("community-game-plays"),
@@ -92,6 +96,26 @@
       communityClearRatingStatus: document.getElementById("community-clear-rating-status"),
       communityClearRetryButton: document.getElementById("community-clear-retry-button"),
       communityClearHomeButton: document.getElementById("community-clear-home-button"),
+      survivalIntroModal: document.getElementById("survival-intro-modal"),
+      closeSurvivalIntroButton: document.getElementById("close-survival-intro-button"),
+      cancelSurvivalIntroButton: document.getElementById("cancel-survival-intro-button"),
+      confirmSurvivalStartButton: document.getElementById("confirm-survival-start-button"),
+      survivalGameMenu: document.getElementById("survival-game-menu"),
+      survivalGameName: document.getElementById("survival-game-name"),
+      survivalLivesValue: document.getElementById("survival-lives-value"),
+      survivalStreakValue: document.getElementById("survival-streak-value"),
+      survivalRemainingValue: document.getElementById("survival-remaining-value"),
+      survivalRestartButton: document.getElementById("survival-restart-button"),
+      survivalHomeButton: document.getElementById("survival-home-button"),
+      survivalResultModal: document.getElementById("survival-result-modal"),
+      closeSurvivalResultButton: document.getElementById("close-survival-result-button"),
+      survivalResultTitle: document.getElementById("survival-result-title"),
+      survivalResultSummary: document.getElementById("survival-result-summary"),
+      survivalResultScore: document.getElementById("survival-result-score"),
+      survivalPlayerNameInput: document.getElementById("survival-player-name-input"),
+      survivalSubmitStatus: document.getElementById("survival-submit-status"),
+      survivalSubmitScoreButton: document.getElementById("survival-submit-score-button"),
+      survivalResultHomeButton: document.getElementById("survival-result-home-button"),
       modeButtons: [...document.querySelectorAll(".mode-button")],
       editorView: document.getElementById("editor-view"),
       gameView: document.getElementById("game-view"),
@@ -320,6 +344,29 @@
       death: false,
       success: false
     };
+    const survivalMaxLives = 3;
+    const survivalPlayerNameKey = "dash-maker-survival-player-name";
+    let survivalLeaderboard = [];
+    let survivalTransitionTimer = 0;
+    let survivalLifeLostTimer = 0;
+    let survivalSubmittingScore = false;
+    let survivalRun = {
+      active: false,
+      lives: survivalMaxLives,
+      score: 0,
+      currentLevel: null,
+      clearedLevelIds: new Set(),
+      clearedLevels: [],
+      transitioning: false,
+      finished: false,
+      resultReason: "",
+      awaitingLevelStart: false,
+      statsSent: {
+        play: false,
+        death: false,
+        success: false
+      }
+    };
 
     const setWorkspaceMessage = (message) => {
       elements.workspaceState.textContent = message;
@@ -332,6 +379,12 @@
       }
     };
 
+    const setSurvivalStatus = (message) => {
+      if (elements.survivalStatus) {
+        elements.survivalStatus.textContent = message;
+      }
+    };
+
     const setTextIfChanged = (element, value) => {
       if (!element) {
         return;
@@ -340,6 +393,23 @@
       const text = String(value);
       if (element.textContent !== text) {
         element.textContent = text;
+      }
+    };
+
+    const readSurvivalPlayerName = () => {
+      try {
+        return localStorage.getItem(survivalPlayerNameKey) || "Player";
+      } catch (error) {
+        console.warn("Survival player name is unreadable", error);
+        return "Player";
+      }
+    };
+
+    const saveSurvivalPlayerName = (playerName) => {
+      try {
+        localStorage.setItem(survivalPlayerNameKey, String(playerName || "Player").trim().slice(0, 32) || "Player");
+      } catch (error) {
+        console.warn("Survival player name could not be saved", error);
       }
     };
 
@@ -834,6 +904,10 @@
       setTextIfChanged(elements.scoreValue, stats.showScore ? stats.score : "-");
       syncValidationRunStartFromStats(stats);
       updateCommunityRunFromStats(stats);
+      updateSurvivalRunFromStats(stats);
+      if (gameRunMode === "survival" && (survivalRun.transitioning || survivalRun.finished)) {
+        return;
+      }
       if (gameRunMode === "validation" && (stats.reachedFinish || stats.status === "Victory")) {
         if (!validationPassed) {
           completeValidation(stats);
@@ -861,6 +935,120 @@
       return window.TechnoDash.Level.normalize(source);
     };
 
+    const createSurvivalRun = () => ({
+      active: true,
+      lives: survivalMaxLives,
+      score: 0,
+      currentLevel: null,
+      clearedLevelIds: new Set(),
+      clearedLevels: [],
+      transitioning: false,
+      finished: false,
+      resultReason: "",
+      awaitingLevelStart: false,
+      statsSent: {
+        play: false,
+        death: false,
+        success: false
+      }
+    });
+
+    const clearSurvivalTransitionTimer = () => {
+      if (survivalTransitionTimer) {
+        window.clearTimeout(survivalTransitionTimer);
+        survivalTransitionTimer = 0;
+      }
+    };
+
+    const getSurvivalPlayableLevels = () => communityLevels.filter((level) => {
+      if (!level || !level.id) {
+        return false;
+      }
+
+      try {
+        return levelHasFinish(getCommunityLevelData(level));
+      } catch (error) {
+        console.warn("Survival skipped unreadable level", error);
+        return false;
+      }
+    });
+
+    const getSurvivalAvailableLevels = () => getSurvivalPlayableLevels()
+      .filter((level) => !survivalRun.clearedLevelIds.has(String(level.id)));
+
+    const pickRandomSurvivalLevel = () => {
+      const availableLevels = getSurvivalAvailableLevels();
+      if (!availableLevels.length) {
+        return null;
+      }
+
+      return availableLevels[Math.floor(Math.random() * availableLevels.length)];
+    };
+
+    const getSurvivalRemainingCount = () => getSurvivalAvailableLevels().length;
+
+    const renderSurvivalHome = () => {
+      const playableCount = getSurvivalPlayableLevels().length;
+      if (elements.startSurvivalButton) {
+        elements.startSurvivalButton.disabled = playableCount <= 0;
+      }
+
+      if (survivalRun.active && !survivalRun.finished) {
+        setSurvivalStatus(`${survivalRun.lives} lives left - ${survivalRun.score} levels cleared.`);
+        return;
+      }
+
+      setSurvivalStatus(playableCount
+        ? `3 lives. ${playableCount} community level${playableCount > 1 ? "s" : ""} available.`
+        : "Survival needs at least one published level with a Finish.");
+    };
+
+    const renderSurvivalLeaderboard = () => {
+      if (!elements.survivalLeaderboardList) {
+        return;
+      }
+
+      elements.survivalLeaderboardList.innerHTML = "";
+      if (!survivalLeaderboard.length) {
+        const empty = document.createElement("li");
+        empty.className = "survival-leaderboard-empty";
+        empty.textContent = "No survival score yet.";
+        elements.survivalLeaderboardList.appendChild(empty);
+        return;
+      }
+
+      const fragment = document.createDocumentFragment();
+      survivalLeaderboard.slice(0, 10).forEach((entry, index) => {
+        const item = document.createElement("li");
+        const rank = document.createElement("span");
+        rank.className = "survival-rank";
+        rank.textContent = `#${index + 1}`;
+        const name = document.createElement("strong");
+        name.textContent = entry.player_name || "Player";
+        const score = document.createElement("span");
+        score.className = "survival-score";
+        const value = Math.max(0, Math.floor(Number(entry.score) || 0));
+        score.textContent = `${value} clear${value > 1 ? "s" : ""}`;
+        item.append(rank, name, score);
+        fragment.appendChild(item);
+      });
+      elements.survivalLeaderboardList.appendChild(fragment);
+    };
+
+    const refreshSurvivalLeaderboard = async () => {
+      try {
+        survivalLeaderboard = await supabase.listSurvivalScores(10);
+        renderSurvivalLeaderboard();
+      } catch (error) {
+        console.warn("Survival leaderboard could not be loaded", error);
+        survivalLeaderboard = [];
+        renderSurvivalLeaderboard();
+        if (elements.survivalLeaderboardList && elements.survivalLeaderboardList.firstElementChild) {
+          elements.survivalLeaderboardList.firstElementChild.textContent = "Survival leaderboard unavailable.";
+        }
+      }
+    };
+
     const getAverageRating = (level) => {
       const count = Number(level && level.rating_count ? level.rating_count : 0);
       if (!count) {
@@ -880,7 +1068,7 @@
     };
 
     const updateCommunityGameInfo = () => {
-      if (!activeCommunityLevel) {
+      if (!activeCommunityLevel || gameRunMode === "survival") {
         elements.communityGameMenu.hidden = true;
         return;
       }
@@ -891,6 +1079,26 @@
       elements.communityGameDeaths.textContent = String(activeCommunityLevel.deaths || 0);
       elements.communityGameSuccesses.textContent = String(activeCommunityLevel.successes || 0);
       elements.communityGameRating.textContent = getRatingLabel(activeCommunityLevel);
+    };
+
+    const updateSurvivalGameInfo = () => {
+      if (!elements.survivalGameMenu) {
+        return;
+      }
+
+      if (gameRunMode !== "survival" || !survivalRun.active) {
+        elements.survivalGameMenu.hidden = true;
+        return;
+      }
+
+      const currentLevelName = survivalRun.currentLevel && survivalRun.currentLevel.name
+        ? survivalRun.currentLevel.name
+        : "Random level";
+      elements.survivalGameMenu.hidden = false;
+      elements.survivalGameName.textContent = currentLevelName;
+      elements.survivalLivesValue.textContent = String(Math.max(0, survivalRun.lives));
+      elements.survivalStreakValue.textContent = String(Math.max(0, survivalRun.score));
+      elements.survivalRemainingValue.textContent = String(Math.max(0, getSurvivalRemainingCount()));
     };
 
     const formatAttemptLabel = (attempts) => {
@@ -1383,6 +1591,7 @@
       try {
         communityLevels = await supabase.listLevels();
         renderCommunityLevels();
+        renderSurvivalHome();
         setCommunityStatus(communityLevels.length
           ? `${communityLevels.length} published level${communityLevels.length > 1 ? "s" : ""}`
           : "No published levels yet.");
@@ -1390,6 +1599,7 @@
         console.warn("Community levels could not be loaded", error);
         communityLevels = [];
         renderCommunityLevels();
+        renderSurvivalHome();
         setCommunityStatus("Community levels unavailable. Check the Supabase table and policies.");
       }
     };
@@ -1420,17 +1630,24 @@
     const showHome = () => {
       saveLastView("home");
       unloadGame();
+      clearSurvivalTransitionTimer();
+      survivalRun.active = false;
+      survivalRun.transitioning = false;
       document.body.classList.add("is-community-home");
       window.scrollTo(0, 0);
       activeCommunityLevel = null;
       communitySessionLevelId = "";
       communitySessionAttempts = 0;
       closeCommunityClearModal();
-      elements.appShell.classList.remove("is-community-play-mode");
+      closeSurvivalIntroModal();
+      closeSurvivalResultModal();
+      elements.appShell.classList.remove("is-community-play-mode", "is-survival-play-mode");
       updateCommunityGameInfo();
+      updateSurvivalGameInfo();
       elements.appShell.classList.add("is-hidden");
       elements.homeView.hidden = false;
       refreshCommunityLevels();
+      refreshSurvivalLeaderboard();
     };
 
     const openEditor = () => {
@@ -1442,12 +1659,18 @@
       saveLastView("editor");
       document.body.classList.remove("is-community-home");
       window.scrollTo(0, 0);
+      clearSurvivalTransitionTimer();
+      survivalRun.active = false;
+      survivalRun.transitioning = false;
       activeCommunityLevel = null;
       communitySessionLevelId = "";
       communitySessionAttempts = 0;
       closeCommunityClearModal();
-      elements.appShell.classList.remove("is-community-play-mode");
+      closeSurvivalIntroModal();
+      closeSurvivalResultModal();
+      elements.appShell.classList.remove("is-community-play-mode", "is-survival-play-mode");
       updateCommunityGameInfo();
+      updateSurvivalGameInfo();
       elements.homeView.hidden = true;
       elements.appShell.classList.remove("is-hidden");
       if (levelEditor) {
@@ -1474,10 +1697,7 @@
             ...levelSnapshot,
             ...updated
           };
-
-          if (!mergedLevel.id) {
-            mergedLevel.id = levelId;
-          }
+          mergedLevel.id = levelId;
 
           let foundLevel = false;
           communityLevels = communityLevels.map((level) => {
@@ -1506,6 +1726,372 @@
         }
       } catch (error) {
         console.warn(`Could not update ${fieldName}`, error);
+      }
+    };
+
+    const closeSurvivalResultModal = () => {
+      if (elements.survivalResultModal) {
+        elements.survivalResultModal.hidden = true;
+      }
+    };
+
+    const closeSurvivalIntroModal = () => {
+      if (elements.survivalIntroModal) {
+        elements.survivalIntroModal.hidden = true;
+      }
+    };
+
+    const openSurvivalIntroModal = () => {
+      renderSurvivalHome();
+      if (!getSurvivalPlayableLevels().length) {
+        setSurvivalStatus("Survival needs at least one published level with a Finish.");
+        return;
+      }
+
+      if (elements.survivalIntroModal) {
+        elements.survivalIntroModal.hidden = false;
+        window.setTimeout(() => {
+          if (elements.confirmSurvivalStartButton) {
+            elements.confirmSurvivalStartButton.focus();
+          }
+        }, 0);
+      }
+    };
+
+    const clearSurvivalLifeLostMessage = () => {
+      if (survivalLifeLostTimer) {
+        window.clearTimeout(survivalLifeLostTimer);
+        survivalLifeLostTimer = 0;
+      }
+      if (elements.gameMessage) {
+        elements.gameMessage.classList.remove("is-survival-life-lost");
+      }
+    };
+
+    const showSurvivalLifeLostMessage = () => {
+      if (!elements.gameMessage) {
+        return;
+      }
+
+      const lives = Math.max(0, survivalRun.lives);
+      elements.gameMessage.textContent = lives === 1 ? "Life lost - last life" : `Life lost - ${lives} lives left`;
+      elements.gameMessage.classList.remove("is-gameover", "is-victory", "is-validated");
+      elements.gameMessage.classList.add("is-survival-life-lost");
+      if (survivalLifeLostTimer) {
+        window.clearTimeout(survivalLifeLostTimer);
+      }
+      survivalLifeLostTimer = window.setTimeout(() => {
+        if (elements.gameMessage) {
+          elements.gameMessage.classList.remove("is-survival-life-lost");
+        }
+        survivalLifeLostTimer = 0;
+      }, 900);
+    };
+
+    const showSurvivalResultModal = (reason = "out-of-lives") => {
+      if (!elements.survivalResultModal) {
+        return;
+      }
+
+      const score = Math.max(0, survivalRun.score);
+      const clearedText = `${score} level${score > 1 ? "s" : ""}`;
+      if (elements.survivalResultTitle) {
+        elements.survivalResultTitle.textContent = reason === "completed"
+          ? "Survival cleared"
+          : "Survival run ended";
+      }
+      if (elements.survivalResultSummary) {
+        elements.survivalResultSummary.textContent = reason === "completed"
+          ? `You cleared every available level: ${clearedText} in a row.`
+          : `You cleared ${clearedText} in a row.`;
+      }
+      if (elements.survivalResultScore) {
+        elements.survivalResultScore.textContent = String(score);
+      }
+      if (elements.survivalSubmitStatus) {
+        elements.survivalSubmitStatus.textContent = "Save your streak to the leaderboard.";
+      }
+      if (elements.survivalSubmitScoreButton) {
+        elements.survivalSubmitScoreButton.disabled = false;
+      }
+      if (elements.survivalPlayerNameInput) {
+        elements.survivalPlayerNameInput.value = readSurvivalPlayerName();
+      }
+
+      elements.survivalResultModal.hidden = false;
+      window.setTimeout(() => {
+        if (elements.survivalPlayerNameInput) {
+          elements.survivalPlayerNameInput.focus();
+          elements.survivalPlayerNameInput.select();
+        }
+      }, 0);
+    };
+
+    const finishSurvivalRun = (reason = "out-of-lives") => {
+      clearSurvivalTransitionTimer();
+      clearSurvivalLifeLostMessage();
+      survivalRun.active = false;
+      survivalRun.finished = true;
+      survivalRun.transitioning = false;
+      survivalRun.resultReason = reason;
+      if (gameScene) {
+        gameScene.stop();
+        if (typeof gameScene.resetInputState === "function") {
+          gameScene.resetInputState();
+        }
+      }
+      updateSurvivalGameInfo();
+      renderSurvivalHome();
+      setWorkspaceMessage(reason === "completed" ? "Survival cleared" : "Survival run ended");
+      showSurvivalResultModal(reason);
+    };
+
+    const loadSurvivalLevel = async (level, options = {}) => {
+      if (!survivalRun.active || !level) {
+        return;
+      }
+
+      clearSurvivalTransitionTimer();
+      clearSurvivalLifeLostMessage();
+      const levelData = getCommunityLevelData(level);
+      survivalRun.currentLevel = level;
+      survivalRun.transitioning = false;
+      survivalRun.awaitingLevelStart = true;
+      survivalRun.statsSent = {
+        play: false,
+        death: false,
+        success: false
+      };
+      activeCommunityLevel = level;
+      communityRunStatsSent = {
+        play: false,
+        death: false,
+        success: false
+      };
+      document.body.classList.remove("is-community-home");
+      window.scrollTo(0, 0);
+      elements.homeView.hidden = true;
+      elements.appShell.classList.remove("is-hidden", "is-validation-mode");
+      elements.appShell.classList.add("is-survival-play-mode");
+      elements.appShell.classList.remove("is-community-play-mode");
+      elements.modeButtons.forEach((button) => button.classList.remove("is-active"));
+      if (elements.validationRunPanel) {
+        elements.validationRunPanel.hidden = true;
+      }
+      closeCommunityClearModal();
+      closeSurvivalResultModal();
+      hideValidationSuccessFeedback();
+      updateCommunityGameInfo();
+      setActiveView("game");
+      updateGameChrome("survival", level.name || "Survival level");
+      updateSurvivalGameInfo();
+      setWorkspaceMessage(`Survival: ${level.name || "random level"}`);
+      await preloadLevelAssets(levelData);
+      ensureGame();
+
+      const loadRun = () => {
+        if (!gameScene || !survivalRun.active || survivalRun.currentLevel !== level) {
+          return;
+        }
+        gameScene.setProgramState(makerProgramState);
+        gameScene.loadLevel(levelData, { play: true });
+      };
+
+      if (gameScene && gameScene.created) {
+        loadRun();
+      } else {
+        window.setTimeout(loadRun, 80);
+      }
+
+      if (options.countPlay !== false) {
+        survivalRun.statsSent.play = true;
+        recordCommunityCounter("plays");
+      }
+    };
+
+    const queueNextSurvivalLevel = () => {
+      const nextLevel = pickRandomSurvivalLevel();
+      if (!nextLevel) {
+        finishSurvivalRun("completed");
+        return;
+      }
+
+      survivalRun.transitioning = true;
+      updateSurvivalGameInfo();
+      setTextIfChanged(elements.gameMessage, "Next level");
+      clearSurvivalLifeLostMessage();
+      setWorkspaceMessage("Survival level cleared. Loading next level...");
+      survivalTransitionTimer = window.setTimeout(() => {
+        loadSurvivalLevel(nextLevel);
+      }, 900);
+    };
+
+    const retrySurvivalLevel = () => {
+      const currentLevel = survivalRun.currentLevel;
+      if (!currentLevel || !survivalRun.active) {
+        finishSurvivalRun("out-of-lives");
+        return;
+      }
+
+      survivalRun.transitioning = true;
+      updateSurvivalGameInfo();
+      showSurvivalLifeLostMessage();
+      setWorkspaceMessage(`${survivalRun.lives} survival lives left. Retrying level...`);
+      survivalTransitionTimer = window.setTimeout(() => {
+        loadSurvivalLevel(currentLevel);
+      }, 850);
+    };
+
+    const updateSurvivalRunFromStats = (stats) => {
+      if (gameRunMode !== "survival" || !survivalRun.active || survivalRun.transitioning) {
+        return;
+      }
+
+      if (survivalRun.awaitingLevelStart) {
+        if (stats.status === "Playing") {
+          survivalRun.awaitingLevelStart = false;
+        }
+        return;
+      }
+
+      if ((stats.reachedFinish || stats.status === "Victory") && !survivalRun.statsSent.success) {
+        survivalRun.statsSent.success = true;
+        const levelId = survivalRun.currentLevel && survivalRun.currentLevel.id
+          ? String(survivalRun.currentLevel.id)
+          : "";
+        if (levelId) {
+          survivalRun.clearedLevelIds.add(levelId);
+          survivalRun.clearedLevels.push({
+            id: levelId,
+            name: survivalRun.currentLevel.name || "Community level"
+          });
+        }
+        survivalRun.score = survivalRun.clearedLevelIds.size;
+        recordCommunityCounter("successes");
+        updateSurvivalGameInfo();
+        renderSurvivalHome();
+        queueNextSurvivalLevel();
+        return;
+      }
+
+      if (stats.status === "Game Over" && !survivalRun.statsSent.death) {
+        survivalRun.statsSent.death = true;
+        survivalRun.lives = Math.max(0, survivalRun.lives - 1);
+        recordCommunityCounter("deaths");
+        updateSurvivalGameInfo();
+        renderSurvivalHome();
+        if (survivalRun.lives <= 0) {
+          finishSurvivalRun("out-of-lives");
+          return;
+        }
+
+        retrySurvivalLevel();
+      }
+    };
+
+    const startSurvivalRun = async () => {
+      if (!communityLevels.length) {
+        setSurvivalStatus("Loading community levels...");
+        try {
+          communityLevels = await supabase.listLevels();
+          renderCommunityLevels();
+        } catch (error) {
+          console.warn("Could not load levels for survival", error);
+          setSurvivalStatus("Survival levels unavailable. Check Supabase.");
+          return;
+        }
+      }
+
+      survivalRun = createSurvivalRun();
+      const firstLevel = pickRandomSurvivalLevel();
+      if (!firstLevel) {
+        survivalRun.active = false;
+        renderSurvivalHome();
+        setSurvivalStatus("Survival needs at least one published level with a Finish.");
+        return;
+      }
+
+      saveLastView("home");
+      closeAllModals();
+      renderSurvivalHome();
+      await loadSurvivalLevel(firstLevel);
+    };
+
+    const restartSurvivalRun = () => {
+      clearSurvivalTransitionTimer();
+      startSurvivalRun();
+    };
+
+    const spendSurvivalLifeAndRetry = () => {
+      if (gameRunMode !== "survival" || !survivalRun.active || survivalRun.transitioning) {
+        return;
+      }
+
+      survivalRun.transitioning = true;
+      survivalRun.lives = Math.max(0, survivalRun.lives - 1);
+      recordCommunityCounter("deaths");
+      updateSurvivalGameInfo();
+      renderSurvivalHome();
+      if (gameScene) {
+        gameScene.stop();
+        if (typeof gameScene.resetInputState === "function") {
+          gameScene.resetInputState();
+        }
+      }
+      if (survivalRun.lives <= 0) {
+        finishSurvivalRun("out-of-lives");
+        return;
+      }
+
+      retrySurvivalLevel();
+    };
+
+    const submitSurvivalScore = async () => {
+      if (survivalSubmittingScore) {
+        return;
+      }
+
+      survivalSubmittingScore = true;
+      const playerName = elements.survivalPlayerNameInput
+        ? elements.survivalPlayerNameInput.value
+        : "Player";
+      saveSurvivalPlayerName(playerName);
+      if (elements.survivalSubmitScoreButton) {
+        elements.survivalSubmitScoreButton.disabled = true;
+      }
+      if (elements.survivalSubmitStatus) {
+        elements.survivalSubmitStatus.textContent = "Saving survival score...";
+      }
+
+      try {
+        const submitted = await supabase.submitSurvivalScore({
+          playerName,
+          score: survivalRun.score,
+          clearedLevelIds: [...survivalRun.clearedLevelIds]
+        });
+        if (submitted) {
+          survivalLeaderboard = [submitted, ...survivalLeaderboard]
+            .sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0))
+            .slice(0, 10);
+        }
+        renderSurvivalLeaderboard();
+        if (elements.survivalSubmitStatus) {
+          elements.survivalSubmitStatus.textContent = "Score saved.";
+        }
+        if (elements.survivalSubmitScoreButton) {
+          elements.survivalSubmitScoreButton.disabled = true;
+        }
+        refreshSurvivalLeaderboard();
+      } catch (error) {
+        console.warn("Survival score could not be saved", error);
+        if (elements.survivalSubmitStatus) {
+          elements.survivalSubmitStatus.textContent = "Score could not be saved. Check the survival_scores table.";
+        }
+        if (elements.survivalSubmitScoreButton) {
+          elements.survivalSubmitScoreButton.disabled = false;
+        }
+      } finally {
+        survivalSubmittingScore = false;
       }
     };
 
@@ -1549,12 +2135,14 @@
       elements.homeView.hidden = true;
       elements.appShell.classList.remove("is-hidden");
       elements.appShell.classList.remove("is-validation-mode");
+      elements.appShell.classList.remove("is-survival-play-mode");
       elements.appShell.classList.add("is-community-play-mode");
       elements.modeButtons.forEach((button) => button.classList.remove("is-active"));
       if (elements.validationRunPanel) {
         elements.validationRunPanel.hidden = true;
       }
       updateCommunityGameInfo();
+      updateSurvivalGameInfo();
       setActiveView("game");
       updateGameChrome("community", level.name || "Community level");
       hideValidationSuccessFeedback();
@@ -1672,6 +2260,7 @@
           communityLevels = [published, ...communityLevels.filter((level) => String(level.id) !== String(published.id))];
         }
         renderCommunityLevels();
+        renderSurvivalHome();
         showHome();
       } catch (error) {
         console.warn("Publish failed", error);
@@ -1730,13 +2319,15 @@
     const getBlockingModals = () => [
         elements.propertiesModal,
         elements.publishModal,
-        elements.validationModal,
-        elements.validationSuccessScreen,
-        elements.clearLevelModal,
-        elements.selectionModal,
-        elements.statsModal,
-        elements.communityClearModal
-      ];
+      elements.validationModal,
+      elements.validationSuccessScreen,
+      elements.clearLevelModal,
+      elements.selectionModal,
+      elements.statsModal,
+      elements.communityClearModal,
+      elements.survivalIntroModal,
+      elements.survivalResultModal
+    ];
 
     const closeAllModals = () => {
       getBlockingModals().forEach((modal) => closeModal(modal));
@@ -1795,6 +2386,9 @@
       }
 
       event.preventDefault();
+      if (gameRunMode === "survival" && gameScene.ended) {
+        return;
+      }
       gameScene.queueJump();
     };
 
@@ -1804,6 +2398,10 @@
       }
 
       event.preventDefault();
+      if (gameRunMode === "survival") {
+        spendSurvivalLifeAndRetry();
+        return;
+      }
       gameScene.queueRestart();
     };
 
@@ -1896,13 +2494,21 @@
         ? "Clear check"
         : mode === "community"
           ? "Community run"
+        : mode === "survival"
+          ? "Survival"
         : mode === "play"
           ? "Playing"
           : "Level test";
       elements.gameTitle.textContent = `${titlePrefix}: ${levelLabel}`;
-      elements.playButton.textContent = mode === "validation" ? "Retry" : "Play";
+      elements.playButton.textContent = mode === "validation" || mode === "survival" ? "Retry" : "Play";
       if (mode === "community") {
         elements.loadedLevelLabel.textContent = "Community level";
+        return;
+      }
+      if (mode === "survival") {
+        elements.loadedLevelLabel.textContent = "Survival level";
+        updateCommunityGameInfo();
+        updateSurvivalGameInfo();
         return;
       }
 
@@ -1917,7 +2523,7 @@
       closeAllModals();
       hideValidationSuccessFeedback();
 
-      if (gameRunMode === "community") {
+      if (gameRunMode === "community" || gameRunMode === "survival") {
         showHome();
         return;
       }
@@ -2034,6 +2640,11 @@
         if (activeCommunityLevel) {
           startCommunityLevel(activeCommunityLevel);
         }
+        return;
+      }
+
+      if (gameRunMode === "survival") {
+        spendSurvivalLifeAndRetry();
         return;
       }
 
@@ -2199,6 +2810,8 @@
       validationPassed ? "passed" : "idle",
       validationPassed ? "Clear check complete. You can publish the level." : "Finish the level once before publishing."
     );
+    renderSurvivalHome();
+    renderSurvivalLeaderboard();
     setWorkspaceMessage(savedWorkspace ? "Workspace restored" : "Autosaved locally");
     activateMode("create");
 
@@ -2235,13 +2848,46 @@
     elements.brandHomeButton.addEventListener("click", showHome);
     elements.communityBrandHomeButton.addEventListener("click", showHome);
     elements.openEditorButton.addEventListener("click", openEditor);
-    elements.refreshCommunityButton.addEventListener("click", refreshCommunityLevels);
+    elements.refreshCommunityButton.addEventListener("click", () => {
+      refreshCommunityLevels();
+      refreshSurvivalLeaderboard();
+    });
+    if (elements.startSurvivalButton) {
+      elements.startSurvivalButton.addEventListener("click", openSurvivalIntroModal);
+    }
     elements.communityRestartButton.addEventListener("click", restartCurrentRun);
     elements.communityHomeButton.addEventListener("click", showHome);
     elements.communityEditorButton.addEventListener("click", openEditor);
     elements.closeCommunityClearButton.addEventListener("click", closeCommunityClearModal);
     elements.communityClearRetryButton.addEventListener("click", restartCurrentRun);
     elements.communityClearHomeButton.addEventListener("click", showHome);
+    if (elements.survivalRestartButton) {
+      elements.survivalRestartButton.addEventListener("click", restartSurvivalRun);
+    }
+    if (elements.survivalHomeButton) {
+      elements.survivalHomeButton.addEventListener("click", showHome);
+    }
+    if (elements.closeSurvivalIntroButton) {
+      elements.closeSurvivalIntroButton.addEventListener("click", closeSurvivalIntroModal);
+    }
+    if (elements.cancelSurvivalIntroButton) {
+      elements.cancelSurvivalIntroButton.addEventListener("click", closeSurvivalIntroModal);
+    }
+    if (elements.confirmSurvivalStartButton) {
+      elements.confirmSurvivalStartButton.addEventListener("click", () => {
+        closeSurvivalIntroModal();
+        startSurvivalRun();
+      });
+    }
+    if (elements.closeSurvivalResultButton) {
+      elements.closeSurvivalResultButton.addEventListener("click", closeSurvivalResultModal);
+    }
+    if (elements.survivalResultHomeButton) {
+      elements.survivalResultHomeButton.addEventListener("click", showHome);
+    }
+    if (elements.survivalSubmitScoreButton) {
+      elements.survivalSubmitScoreButton.addEventListener("click", submitSurvivalScore);
+    }
     elements.communityClearRatingStars.addEventListener("click", async (event) => {
       const ratingButton = event.target.closest("[data-community-clear-rating]");
       if (!ratingButton || !activeCommunityLevel) {
@@ -2332,6 +2978,10 @@
       }
       if (gameRunMode === "community" && activeCommunityLevel) {
         startCommunityLevel(activeCommunityLevel);
+        return;
+      }
+      if (gameRunMode === "survival") {
+        spendSurvivalLifeAndRetry();
         return;
       }
       startTest();
@@ -2439,8 +3089,13 @@
       elements.clearLevelModal,
       elements.selectionModal,
       elements.statsModal,
-      elements.communityClearModal
+      elements.communityClearModal,
+      elements.survivalIntroModal,
+      elements.survivalResultModal
     ].forEach((modal) => {
+      if (!modal) {
+        return;
+      }
       modal.addEventListener("click", (event) => {
         if (event.target === modal) {
           closeModal(modal);
@@ -2467,7 +3122,7 @@
 
       const canRestartCurrentRun = gameScene
         && elements.gameView.classList.contains("is-active")
-        && ["test", "validation", "community"].includes(gameRunMode)
+        && ["test", "validation", "community", "survival"].includes(gameRunMode)
         && !shouldIgnoreGameShortcut(event)
         && isRestartIntent;
       if (canRestartCurrentRun) {

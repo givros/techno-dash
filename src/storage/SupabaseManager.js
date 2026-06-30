@@ -9,6 +9,7 @@
       this.voteTableName = Object.prototype.hasOwnProperty.call(options, "voteTableName")
         ? options.voteTableName
         : "community_level_votes";
+      this.survivalScoreTableName = options.survivalScoreTableName || "survival_scores";
       this.useVoteTable = options.useVoteTable !== false && Boolean(this.voteTableName);
     }
 
@@ -36,6 +37,34 @@
           successes: 0,
           rating_total: 0,
           rating_count: 0
+        }
+      });
+
+      return Array.isArray(rows) ? rows[0] : rows;
+    }
+
+    async listSurvivalScores(limit = 10) {
+      const safeLimit = Math.min(50, Math.max(1, Math.floor(Number(limit) || 10)));
+      return this.request(
+        `${this.survivalScoreTableName}?select=id,player_name,score,cleared_level_ids,created_at&order=score.desc,created_at.asc&limit=${safeLimit}`
+      );
+    }
+
+    async submitSurvivalScore({ playerName, score, clearedLevelIds }) {
+      const safeName = String(playerName || "Player").trim().slice(0, 32) || "Player";
+      const safeScore = Math.max(0, Math.floor(Number(score) || 0));
+      const safeClearedLevelIds = Array.isArray(clearedLevelIds)
+        ? clearedLevelIds.map((id) => String(id)).filter(Boolean)
+        : [];
+      const rows = await this.request(this.survivalScoreTableName, {
+        method: "POST",
+        headers: {
+          Prefer: "return=representation"
+        },
+        body: {
+          player_name: safeName,
+          score: safeScore,
+          cleared_level_ids: safeClearedLevelIds
         }
       });
 
